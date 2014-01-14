@@ -18,19 +18,24 @@ use Getopt::Long;
 #              Command-line options                  #
 ###################################################### 
 
-my ($file, $win_size, $shuffle, $shuffle_file) = (undef, 1000, undef, undef);
-my ($min_t, $skip)  = (2.576, undef);
-my ($min_mean_diff, $max_var, $help) = (0.65, 0.1, undef);
+my ($file, $chunk_size, $shuffle, $shuffle_file) = (undef, 1000, undef, undef);
+my ($min_t, $min_window_size, $max_window_size, $skip)  = (2.576, 3, undef, undef);
+my ($mean_mode, $min_mean_diff, $max_var, $help) = (1, 0.6, 0.04, undef);
 
 my $usage = "
-$0 --file <TSV file of read count data> --win_size <default = $win_size> 
+$0 --file <TSV file of read count data> --chunk_size <default = $chunk_size> 
 
 optional arguments:
         --shuffle : produce a shuffle file after <x> shufflings of chunk data
 		--shuffle_file : use a shuffle file
 		--min_t : minimum t-test value to consider significant <default = $min_t>
+		--min_window_size : minimum size of window <default = $min_window_size>
+		--max_window_size : maximum size of window <default = undefined>
 		--min_mean_diff : minimum difference expected between average copy number within and outside window <default = $min_mean_diff
-		--max_var : maximum variance allowed within a window (scaled upwards for small windows) <default = $max_var>
+		--max_var : maximum variance allowed withing a window <default = $max_var>
+		--mean_mode : 1 or 2 (default = $mean_mode)
+					mode = 1, compares mean of window with mean of all bins outside of window
+					mode = 2, compares mean of window with mean of enclosing chunk (quicker for large chunks)
 		--skip : skip rest of chromosome when the start chunk coordinate is greater than that specified
         --help
         
@@ -38,12 +43,15 @@ optional arguments:
 
 GetOptions (
 	"file=s"            => \$file,
-	"win_size=i"        => \$win_size,
+	"chunk_size=i"      => \$chunk_size,
 	"shuffle=i"         => \$shuffle,
 	"shuffle_file=s"    => \$shuffle_file,
 	"min_t=f"           => \$min_t,
+	"min_window_size=i" => \$min_window_size,
+	"max_window_size=i" => \$max_window_size,
 	"min_mean_diff=f"   => \$min_mean_diff,
 	"max_var=f"         => \$max_var,
+	"mean_mode=i"       => \$mean_mode,
 	"skip=i"            => \$skip,
 	"help"              => \$help,
 );
@@ -52,11 +60,15 @@ die $usage if ($help);
 die $usage if (not defined $file);
 die "$shuffle should be positive integer" if (defined $shuffle and $shuffle == 0);
 
+$max_window_size = $chunk_size / 2 if (not defined $max_window_size);
 warn "Parameters:
---win_size = $win_size
+--chunk_size = $chunk_size
 --min_t = $min_t
+--min_window_size = $min_window_size
+--max_window_size = $max_window_size
 --min_mean_diff = $min_mean_diff
---max_var = $max_var\n\n";
+--max_var = $max_var
+--mean_mode = $mean_mode\n\n";
 
 ####################################
 # Global variables
@@ -71,6 +83,9 @@ my %read_counts;
 # will want to store all significant scoring windows found in each chunk
 my %sig_windows;
 
+# if $mean_mode == 2, we'll keep track of the mean and variance of each chunk
+my ($chunk_mean, $chunk_var);
+
 
 # read shuffled data from file (if specified)
 read_shuffle_data() if ($shuffle_file);
@@ -78,6 +93,10 @@ read_shuffle_data() if ($shuffle_file);
 # grab read count data from file
 read_counts_file();
 
+# check that $max_window_size doesn't exceed the number of data points available (at least for Chr1)
+if ($max_window_size >= scalar @{$read_counts{'Chr1'}}){
+	die "ERROR: Max window size ($max_window_size) >= number of data points\n";
+}
 
 # what we do next depends on whether we are shuffling data or not
 # lots of data processing with shuffled data, or one run with the real (unshuffled) data
@@ -87,7 +106,7 @@ if ($shuffle){
 		process_chromosomes($i);
 		
 		# print out t-test scores after each shuffling
-		my $output_file = "$file.shuffled.$win_size.$shuffle";
+		my $output_file = "$file.shuffled.$chunk_size.$shuffle";
 		open(my $out, ">", $output_file) or die "Can't open $output_file\n";
 		foreach my $window (sort {$a cmp $b} keys %max_t){
 			print $out "$window\t$max_t{$window}\n";
@@ -95,8 +114,8 @@ if ($shuffle){
 		close($out);
 	}
 } else{
-		warn "Looping over chromosome in windows of size $win_size\n";
-		print "Chr\tWindow\tWin:start-end\tType\tCopy_number\tStart_coord\tEnd_coord\tt\tMean\tVariance\n";
+		warn "Looping over chromosome in chunks of size $chunk_size\n";
+		print "Chr\tChunk\tWin:start-end\tWin_size\tType\tCopy_number\tStart_coord\tEnd_coord\tt\tMean1\tMean2\n";
 		process_chromosomes(1);
 }
 
@@ -119,152 +138,110 @@ sub process_chromosomes{
 
 	my ($run) = @_;
 	
+	# will keep track of final results per chunk, as there may be duplicate
+	# significant windows, found from overlapping chunks, and we only want to
+	# show one
+	my %final_windows;
+
 	# 1st loop, just loop over desired chromosomes worth of data
 	foreach my $chr (qw(Chr1 Chr4)){
 
-		# shuffle this chunk if we are in shuffle mode
-#			if($shuffle){
-#				@{$read_counts{$chr}}[$chunk_start..$chunk_end] = shuffle(@{$read_counts{$chr}}[$chunk_start..$chunk_end]);
-#			}
+		# 2nd loop, going over chunks (v. large windows) across each chromosome
+		for(my $chunk_start = 0; $chunk_start < @{$read_counts{$chr}} - $max_window_size; $chunk_start += ($max_window_size)){
+			# do we want to use our shortcut to end early/
+			if($skip){
+				die "Chunk start $chunk_start exceeded by --skip $skip option, exiting early\n" if ($chunk_start > $skip);	
+			}
+			
+			my $chunk_end = $chunk_start + $chunk_size - 1;
+			$chunk_end = scalar(@{$read_counts{$chr}}) - 1  if ($chunk_end > scalar @{$read_counts{$chr}});
 
-		
-		# reset significant windows
-		%sig_windows = ();
+			# shuffle this chunk if we are in shuffle mode
+			if($shuffle){
+				@{$read_counts{$chr}}[$chunk_start..$chunk_end] = shuffle(@{$read_counts{$chr}}[$chunk_start..$chunk_end]);
+			}
 
-		my $chr_size = @{$read_counts{$chr}};
-		
-		# now process all windows in this chunk
-		loop_over_chromosome($chr, 0, $chr_size);
-
-		
-		# need to keep track of previous significant details in order to generate blocks that span the two edges.
-		my @previous_windows;
-		my $counter = 0;
-
-		# final output for current chunk, in ascending chromosome order
-		WINDOW: foreach my $window (sort {$sig_windows{$a}{min} <=> $sig_windows{$b}{min}} keys %sig_windows){
-			$counter++;
-
-			my $t            = sprintf("%.2f", $sig_windows{$window}{t});
-			my $mean1        = sprintf("%.2f", $sig_windows{$window}{mean1});
-			my $mean2        = sprintf("%.2f", $sig_windows{$window}{mean2});
-			my $var1         = $sig_windows{$window}{var1};
-			my $var2         = $sig_windows{$window}{var2};
-			my $midpoint_A   = $sig_windows{$window}{midA};
-			my $midpoint_B   = $sig_windows{$window}{midB};
-			my $copy_number1 = $sig_windows{$window}{copy_number1};
-			my $copy_number2 = $sig_windows{$window}{copy_number2};
+			warn "Run $run, looping over CHUNK: $chr:$chunk_start-$chunk_end\n";
+			
+			# calculate mean and variance of read counts in current chunk (if $mean_mode == 2)
+			if ($mean_mode == 2){
+				$chunk_mean = sum(@{$read_counts{$chr}}[$chunk_start..$chunk_end]) / $chunk_size;
+				$chunk_var = sum(map {($_ - $chunk_mean) ** 2} @{$read_counts{$chr}}[$chunk_start..$chunk_end]) / ($chunk_size - 1);
+			}
 	
-			my ($start, $end)   = split(/-/, $window);
+			# reset significant windows
+			%sig_windows = ();
 
-			# now format output for printing
-			my $start_pos      = sprintf("%.0f",($start * 1000));
-			my $end_pos        = sprintf("%.0f",($end * 1000));
-			my $midpoint_A_pos = sprintf("%.0f",($midpoint_A * 1000));
-			my $midpoint_B_pos = sprintf("%.0f",($midpoint_B * 1000));
+			# now process all windows in this chunk
+			loop_over_chunk($chunk_start, $chunk_end, $chr);
 
-			
-			# print first half of window
-			print "$chr\t";
-			print "$window\t";
-			print "$start-$midpoint_A\t";
-			print "edge-L\t";
-			print "$copy_number1\t";
-			print "$start_pos\t$midpoint_A_pos\t";
-			print "$t\t";
-			print "$mean1\t";
-			print "$var1\n";
 
-			# print 2nd half of window
-			print "$chr\t";
-			print "$window\t";
-			print "$midpoint_B-$end\t";
-			print "edge-R\t";
-			print "$copy_number2\t";
-			print "$midpoint_B_pos\t$end_pos\t";
-			print "$t\t";
-			print "$mean2\t";
-			print "$var2\n";
+			# final output for current chunk, in descending t-score order
+			foreach my $window (sort {$sig_windows{$b}{t} <=> $sig_windows{$a}{t}} keys %sig_windows){
+				my $t        = sprintf("%.2f", $sig_windows{$window}{t});
+				my $win_size = $sig_windows{$window}{size};
+				my $mean1    = sprintf("%.2f", $sig_windows{$window}{mean1});
+				my $mean2    = sprintf("%.2f", $sig_windows{$window}{mean2});
+		
+				my ($start, $end)   = split(/-/, $window);
 
-			# create a block for first part of chromosome (might be erroneous assumption?)
-			if($counter == 1){
+				# have we already seen this window from a previous, overlapping, chunk?
+				# if so, just keep one window. They may have different t-scores based on 
+				# mean of chunk (if using --mean_mode 2)
+				next if (exists($final_windows{"$chr:$start-$end"}));
+
+				# now format output for printing
+				my $start_pos = sprintf("%.0f",($start * 1000));
+				my $end_pos   = sprintf("%.0f",($end * 1000));
+
+				my $win_coords = "$start-$end";
+
+				# some significant windows will correspond to edge of chunks
+				# rather than edges of true 2x/3x blocks within chunks. Want to flag these.
+				# default is 'block' for whole block, otherwise edge-L, edge-R or possibly
+				# edge-LR. Also, if the window is exactly half the chunk size, then this is 
+				# not a true block (call this a 'fakeblock', we probably have not found the
+				# true ends of these fakeblocks)
+
+				my $type;
+				
+				if(($end - $start +1) == $max_window_size){
+					$type = 'fakeblock';
+				} elsif ($start == $chunk_start and $start == 0){
+					$type = 'block';
+				} elsif ($start == $chunk_start){
+					$type = 'edge-R';
+				} elsif ($end == $chunk_end){
+					$type = 'edge-L';
+				} else {
+					$type = 'block';
+				}
+				
+				# now calculate whether this is a 1x, 2x, or 3x block
+				# this is a guesstimate
+				my $copy_number;
+				
+				if ($mean1 < 2){
+					$copy_number = "1x";
+				} elsif ($mean1 < 3){
+					$copy_number = "2x";
+				} else{
+					$copy_number = "3x";
+				}
+				
 				print "$chr\t";
-				print "NA\t";
-				print "0-$midpoint_A\t";
-				print "block\t";
-				print "$copy_number1\t";
-				print "0\t$midpoint_A_pos\t";
-				print "NA\t";
-				print "NA\t";
-				print "NA\n";
-
-				# save details of current window and move to next window
-				my $hash_ref = {'midA'         => $midpoint_A, 
-							    'midB'         => $midpoint_B,
-							    'copy_number1' => $copy_number1, 
-							    'copy_number2' => $copy_number2, 
-							    'midB_pos'     => $midpoint_B_pos};
-							    
-				push(@previous_windows, $hash_ref);
-				next WINDOW;			
-			}				
-
-			# if we are here we are looking at the 2nd or greater window
-			# this means can print details of what should be the full block
-			# between the end of the previous window (technically mid_point_A) and the start of current window 
-			
-			# extract details from previous window that we examined
-			# will be last element in @previous_windows
-			my $previous_midpoint_B      = ${$previous_windows[-1]}{midB};
-			my $previous_midpoint_B_pos  = ${$previous_windows[-1]}{midB_pos};
-			my $previous_copy_number     = ${$previous_windows[-1]}{copy_number2};
-			
-			# we can calculate what the variance will be for this block
-			# if too high, we want to discount it
-			my @block = @{$read_counts{$chr}}[$previous_midpoint_B..$midpoint_A];
-
-			my $n = scalar @block;
-			my $sum = sum(@block);		
-			my $mean = $sum/$n;
-			my $var = sum(map {($_ - $mean) ** 2} @block) / ($n - 1);
-
-			# scale variance based on length of block
-			my $scaled_max_var = $max_var * (30/(($n / 2) + 10) + 0.8);			
-
-			print "# Block $previous_midpoint_B-$midpoint_A (L=$n)\tVariance = $var\tScaled max variance = $scaled_max_var";
-			if ($var > $max_var and $var < $scaled_max_var){
-				print "\t***\n";			
-			} else {
-				print "\n";
+				print "$chunk_start-$chunk_end\t";
+				print "$win_coords\t";
+				print "$win_size\t";
+				print "$type\t";
+				print "$copy_number\t";
+				print "$start_pos\t$end_pos\t";
+				print "$t\t";
+				print "$mean1\t$mean2\n";
+		
+				# log this window
+				$final_windows{"$chr:$start-$end"} = 1;		
 			}
-
-			# only print block if variance is low enough
-			if ($var > $scaled_max_var){
-				print "# removing block as variance is too high ($var)\n";
-				$counter++;
-				# need to remove the information from @previous_windows and then skip 
-				splice(@previous_windows, -1, 1);
-				next WINDOW;				
-			}
-			
-			print "$chr\t";
-			print "NA\t";
-			print "$previous_midpoint_B-$midpoint_A\t";
-			print "block\t";
-			print "$previous_copy_number\t";
-			print "$previous_midpoint_B_pos\t$midpoint_A_pos\t";
-			print "NA\t";
-			print "NA\t";
-			print "NA\n";
-			
-			# save details of current window and move to next window
-			my $hash_ref = {'midA'         => $midpoint_A, 
-							'midB'         => $midpoint_B,
-							'copy_number1' => $copy_number1, 
-							'copy_number2' => $copy_number2, 
-							'midB_pos'     => $midpoint_B_pos};							
-			push(@previous_windows, $hash_ref);
-
 		}
 	}
 }
@@ -272,164 +249,124 @@ sub process_chromosomes{
 
 
 
-sub loop_over_chromosome{
+sub loop_over_chunk{
 
-	my ($chr, $start, $end) = @_;
-
-	# track copy number of last 'half-edge' that we saw. E.g. if an edge spanned a 2x-3x junction,
-	# the last half-edge was 3x, also want to store coordinates, so use a hash
-	my %last_window;
-
-	# generate initial array of read counts for first window that we inspect
-	my @values_A;
-	
-	# Will compare @values_A to all *other* counts in current chunk
-	my @values_B;
+	my ($start, $end, $chr) = @_;
 		
-	# now loop along windows in current chunk (data from @{$read_counts{}} array)
-	WINDOW: for(my $i = $start; $i <= $end - $win_size; $i++){
+	# start comparing windows of size 2 up to 'n / 2' (where n is the size of the current chunk)
+#	for(my $win_size = $max_window_size; $win_size >= $min_window_size; $win_size--){
+	for(my $win_size = $min_window_size; $win_size <= $max_window_size; $win_size++){
 
-		my ($min, $max) = ($i, $i + $win_size - 1);
+#		warn "$chr\tChunk:$start-$end\twin_size = $win_size\n";
+
+		# generate initial array of read counts for first window that we inspect
+		my @values_A;
 		
-		# do we want to use our shortcut to end early/
-		if($skip){
-			last WINDOW if ($min > $skip);
-			die "Chunk start $min exceeded by --skip $skip option, exiting early\n" if ($min > $skip);	
-		}
-
-
-		my $mid_point_A = $min + ($win_size / 2) - 1;		
-		my $mid_point_B = $mid_point_A + 1;
-
-		# first window along chunk
-		if($i == $start){
-			# set default contents of @values_A, don't need to do anything else
-			@values_A = @{$read_counts{$chr}}[$min..$mid_point_A];
-			@values_B = @{$read_counts{$chr}}[$mid_point_B..$max]; 
-		} else{
-			# get rid of one element from LHS of @values_A, and add a new element on RHS
-			my $tmp = shift(@values_A);
-			push(@values_A, shift(@values_B));	
-						
-			# now add one value to @values_B
-			push(@values_B, ${$read_counts{$chr}}[$max]);	
-		}
+		# if $mean_mode == 1, will compare @values_A to all *other* counts in current chunk
+		# otherwise, take mean of entire chunk (no real difference for small window sizes,
+		# but there will be a difference when window size is big and chunk size is small)
+		my @values_B;
 		
-		# calculate t value
-		my ($t, $mean1, $mean2, $var1, $var2) = t_test(\@values_A, \@values_B);			
-		 
-#		print "$chr\t$min-$max\t$min-$mid_point_A\t$mid_point_B-$max\tt=$t\tmeans = $mean1 vs $mean2\tvars = $var1 vs $var2\n";
-		
-		# skip if we are not looking at a duplicated block 
-		# these will have means of ~1.7, but we'll use a higher cut-off value
-		# (based on observations)
+		# @values_B will be comprised of two regions (to the left and right of @values_A)
+	 	my (@values_BL, @values_BR);
+	 	
+		# now loop along windows in current chunk (data from @{$read_counts{}} array)
+		WINDOW: for(my $i = $start; $i <= $end - $win_size + 1; $i++){
+			my ($min, $max) = ($i, $i + $win_size - 1);
+
+			warn "$chr\tChunk:$start-$end\twin_size = $win_size\tWindow $min-$max\\n";
+
+			# first window along chunk
+			if($i == $start){
+				# set default contents of @values_A, don't need to do anything else
+				@values_A = @{$read_counts{$chr}}[$min..$max];
+				if ($mean_mode == 1){
+					@values_B = @{$read_counts{$chr}}[$max+1..$end]; 
+					@values_BR = @values_B;			
+				}
+			} 
+			# all other windows
+			else{
+				# get rid of one element from LHS of @values_A, and add a new element on RHS
+				my $tmp = shift(@values_A);
+				push(@values_A, ${$read_counts{$chr}}[$max]);	
+				if ($mean_mode == 1){
+				
+					# add one value to left-hand array
+					push(@values_BL, $tmp);
+				
+					# and remove one value from right-hand array
+					shift(@values_BR);
+			
+					# form @values_B from the two separate arrays
+					@values_B = (@values_BL, @values_BR);
+				}
+			}
+
+			# calculate t value, do this slightly differently depending on value of $mean_mode
+			my ($t, $mean1, $mean2, $var1);
+			if ($mean_mode == 1){
+				($t, $mean1, $mean2, $var1) = t_test(\@values_A, \@values_B);			
+			} else{
+				($t, $mean1, $mean2, $var1) = t_test(\@values_A, $chunk_mean, $chunk_var);			
+			}
+
+			# skip if we are not looking at a duplicated block 
+			# these will have means of ~1.7, but we'll use a higher cut-off value
+			# (based on observations)
 #			next if ($mean1 < 2.2);
-		
+			
 #			print "\t$win_size\t$min-$max\t$t\t$mean1\t$mean2\n" if ($t > $min_t);
-		
-		# if we are in -shuffle mode, do we have a new highest t_score at current window size, for current chunk?				
-# 		if($shuffle){
-# 			if(not defined $max_t{"$chr:$start-$end:$win_size"}){
-# 				$max_t{"$chr:$start-$end:$win_size"} = $t;			
-# 				my $rounded_t = sprintf("%.3f", $t);
-# #					warn "\tShuffle) $min-$max ($start-$end:$win_size) - new max t-value $rounded_t\n";				
-# 
-# 			} elsif($t > $max_t{"$chr:$start-$end:$win_size"}){
-# 				$max_t{"$chr:$start-$end:$win_size"} = $t;
-# 				my $rounded_t = sprintf("%.3f", $t);
-# #					warn "\tShuffle) $min-$max ($start-$end:$win_size) - new max t-value $rounded_t\n";				
-# 			}
-# 			next WINDOW;
-# 		}
-
-		
-		# skip windows if the window mean is too close to the rest-of-the-window mean
-		# we are looking for cases where a window goes from 1x reads to 2x or 3x
-		# so difference in means should really be at least 1.0, but we will be cautious
-		# and use a user-defined cutoff ($min_mean_diff) defaulting to 0.65
-		my $mean_diff = sprintf("%.3f", abs($mean1 - $mean2));
-		warn "# A\t$chr\tCHR\t$min-$max\t$min-$mid_point_A\t$mid_point_B-$max\tblock\t2x\t${min}000\t${max}000\t$t\t$mean1\t$mean2\tmean_diff = $mean_diff\tvars = $var1 vs $var2\n";
-
-		next if ($mean_diff <= $min_mean_diff);
-
-		
-		# only want to record windows which are statistically significant (P < 0.001 t = ~3.29)			
-		if ($t >= $min_t){
-
-			# if we have used a shuffled results file, we can now also ask whether
-			# t-value could be expected by chance (ignore current t-value if this is the case)
-#			next WINDOW if ($shuffle_file and $t <= $max_t{"$chr:$start-$end:$win_size"});
-
-			# scale variance 
-			my $scaled_max_var = $max_var * (30/(($win_size / 2) + 10) + 0.8);			
-
-			# is there too much variance inside this window?
-			# e.g. when a block incorrectly spans a 2x block and some of a 3x block, variance
-			# will be higher than a smaller block that captures just the 2x region
-			next WINDOW unless ($var1 <= $scaled_max_var and $var2 <= $scaled_max_var);
-
-			# now check if this current window encloses a pre-existing window
-			# which has a lower t-value score. If so, can remove the smaller window
-			next WINDOW unless check_for_redundancy($min, $max, $mean1, $t);			
-						
-			# now calculate whether each half is in a 1x, 2x, or 3x block
-			# this is a guesstimate
-			my ($copy_number1, $copy_number2);
 			
-			if ($mean1 < 2){
-				$copy_number1 = "1x";
-			} elsif ($mean1 < 3){
-				$copy_number1 = "2x";
-			} else{
-				$copy_number1 = "3x";
-			}
-
-			if ($mean2 < 2){
-				$copy_number2 = "1x";
-			} elsif ($mean2 < 3){
-				$copy_number2 = "2x";
-			} else{
-				$copy_number2 = "3x";
+			# if we are in -shuffle mode, do we have a new highest t_score at current window size, for current chunk?				
+			if($shuffle){
+				if(not defined $max_t{"$chr:$start-$end:$win_size"}){
+					$max_t{"$chr:$start-$end:$win_size"} = $t;			
+					my $rounded_t = sprintf("%.3f", $t);
+#					warn "\tShuffle) $min-$max ($start-$end:$win_size) - new max t-value $rounded_t\n";				
+	
+				} elsif($t > $max_t{"$chr:$start-$end:$win_size"}){
+					$max_t{"$chr:$start-$end:$win_size"} = $t;
+					my $rounded_t = sprintf("%.3f", $t);
+#					warn "\tShuffle) $min-$max ($start-$end:$win_size) - new max t-value $rounded_t\n";				
+				}
+				next WINDOW;
 			}
 
 			
-			# Before we store details of this new 'edge', we should first try to check
-			# that we didn't miss an edge earlier that would leave to an errant block detection.
-			# E.g. if we previously called a 2x block, and now we have an edge that goes from 3x to 2x
-			# then there should have been a *second* 2x-3x edge which has been missed.
-			# but don't check this if current window overlaps previous window (we have not yet found the best edge)
-			if($last_window{copy_number}){
+			# skip windows if the window mean is too close to the rest-of-the-window mean
+			# we are looking for cases where a window goes from 1x reads to 2x or 3x
+			# so difference in means should really be at least 1.0, but we will be cautious
+			next if (abs($mean1 - $mean2) <= $min_mean_diff);
 			
-				warn "MISSING BLOCK: Last half window = $last_window{start}-$last_window{end} $last_window{copy_number}, This half window = $min-$mid_point_A $copy_number1
-# C\t$chr\tCHR\t$min-$max\t$min-$mid_point_A\t$mid_point_B-$max\tblock\t2x\t${min}000\t${max}000\t$t\t$mean1\t$mean2\tmean_diff = $mean_diff\tvars = $var1 vs $var2\n";
-			
-				if(($last_window{copy_number} ne $copy_number1) and	check_for_overlap($last_window{start}, $last_window{end}, $min, $mid_point_A) == 0){
-					next WINDOW;
-				}	
-			}
-			
-			warn "# B\t$chr\tCHR\t$min-$max\t$min-$mid_point_A\t$mid_point_B-$max\tblock\t2x\t${min}000\t${max}000\t$t\t$mean1\t$mean2\tmean_diff = $mean_diff\tvars = $var1 vs $var2\n";
-			warn "\n";
+			# only want to record windows which are statistically significant (P < 0.001 t = ~3.29)			
+			if ($t >= $min_t){
 
+				# if we have used a shuffled results file, we can now also ask whether
+				# t-value could be expected by chance (ignore current t-value if this is the case)
+				next WINDOW if ($shuffle_file and $t <= $max_t{"$chr:$start-$end:$win_size"});
+
+				# is there too much variance inside this window?
+				# e.g. when a block incorrectly spans a 2x block and some of a 3x block, variance
+				# will be higher than a smaller block that captures just the 2x region
+				next WINDOW unless ($var1 <= $max_var);
+
+				# now check if this current window encloses a pre-existing window
+				# which has a lower t-value score. If so, can remove the smaller window
+				next WINDOW unless check_for_redundancy($min, $max, $mean1, $t);
+
+				my $mean_diff = sprintf("%.2f", abs($mean1 - $mean2));
+				warn "\t$chr\t$start-$end\t$min-$max\t$win_size\tblock\t2x\t${min}000\t${max}000\t$t\t$mean1\t$mean2\tmean_diff = $mean_diff\tvar = $var1\n";				
+	
 			
-			# keep track of details of this significant window
-			$sig_windows{"$min-$max"}{t}     = $t;
-			$sig_windows{"$min-$max"}{min}   = "$min";				
-			$sig_windows{"$min-$max"}{max}   = "$max";				
-			$sig_windows{"$min-$max"}{mean1} = "$mean1";
-			$sig_windows{"$min-$max"}{mean2} = "$mean2";				
-			$sig_windows{"$min-$max"}{var1}  = "$var1";
-			$sig_windows{"$min-$max"}{var2}  = "$var2";				
-			$sig_windows{"$min-$max"}{midA}  = "$mid_point_A";				
-			$sig_windows{"$min-$max"}{midB}  = "$mid_point_B";			
-			$sig_windows{"$min-$max"}{copy_number1}  = "$copy_number1";
-			$sig_windows{"$min-$max"}{copy_number2}  = "$copy_number2";
-			
-			# store a few details of the last significant window
-			$last_window{start} = $mid_point_B;
-			$last_window{end} = $max;
-			$last_window{copy_number} = $copy_number2;
-		} 				
+				# keep track of details of this significant window
+				$sig_windows{"$min-$max"}{t}     = $t;
+				$sig_windows{"$min-$max"}{size}  = $win_size;
+				$sig_windows{"$min-$max"}{mean1} = "$mean1";
+				$sig_windows{"$min-$max"}{mean2} = "$mean2";				
+					
+			} 				
+		}
 	}
 }
 
@@ -453,7 +390,7 @@ sub check_for_redundancy{
 			next unless ($overlap);
 
 			my ($s1, $s2) = ($end1-$start1+1, $end2-$start2+1);
-#			print "\tComparing $start1-$end1 (L=$s1, t=$t1) with $start2-$end2 (L=$s2, t=$t2)\n";
+#			print "Comparing $start1-$end1 (L=$s1, t=$t1) with $start2-$end2 (L=$s2, t=$t2)\n";
 			
 			# If two significant windows overlap, they might have opposing
 			# means (i.e. one is significantly high, and one is significantly low)
@@ -536,8 +473,14 @@ sub check_for_overlap{
 sub t_test{
 	my ($num1, $num2, $n1, $n2, $sum1, $sum2, $mean1, $mean2, $var1, $var2, $chunk_mean, $chunk_var);
 	
-	# will receive references to 2 arrays of numbers
-	($num1, $num2) = @_;
+	# will receive references to 2 arrays of numbers ($mean_mode == 1)
+	# or 1 array of numbers plus mean and variance for entire chunk ($mean_mode == 2)
+	if ($mean_mode == 1){
+	 	($num1, $num2) = @_;
+	} else {
+		# using whole chunk for comparison
+	 	($num1, $chunk_mean, $chunk_var) = @_;
+	}
 	 
 	# n1, mean1, sum1, and var1 is the same for either method
 	$n1 = scalar @$num1;
@@ -545,13 +488,19 @@ sub t_test{
 	$mean1 = $sum1/$n1;
 	$var1 = sum(map {($_ - $mean1) ** 2} @$num1) / ($n1 - 1);
 
-	# n2, mean2, sum2, and var2 
-	$n2 = scalar @$num2;
-	$sum2 = sum(@$num2);
-	$mean2 = $sum2/$n2;
-	$var2 = sum(map {($_ - $mean2) ** 2} @$num2) / ($n2 - 1);	
-	
-	
+	# n2, mean2, sum2, and var2 depends on which $mean_mode we are using
+	if ($mean_mode == 1){
+		$n2 = scalar @$num2;
+		$sum2 = sum(@$num2);
+		$mean2 = $sum2/$n2;	
+		$var2 = sum(map {($_ - $mean2) ** 2} @$num2) / ($n2 - 1);	
+		
+	} else {
+	 	$n2 = $chunk_size;
+		$mean2 = $chunk_mean;
+		$var2 = $chunk_var;		
+	}	
+
 	# change $var1 and $var2 to be some small non-zero value if actual value is zero
 	# this can happen for some very small window sizes
 	$var1 = 0.0001 if ($var1 == 0);
@@ -563,7 +512,7 @@ sub t_test{
 		
 	# calculate t-test score and return this plus both means
 	my $t = ($mean1 - $mean2) / $std_err_of_diff;			
-	return(abs($t), sprintf("%.3f", $mean1), $mean2, sprintf("%.4f", $var1), sprintf("%.4f", $var2));
+	return(abs($t), sprintf("%.3f", $mean1), $mean2, sprintf("%.4f", $var1));
 }
 
 # open shuffle file information (if present)
@@ -583,7 +532,7 @@ sub read_shuffle_data{
 	close($in);
 	
 	# add zero values for large window sizes that may not have been covered in the shuffling
-	for(my $i = 2; $i <= $win_size; $i++){
+	for(my $i = 2; $i <= $max_window_size; $i++){
 		if (not defined $max_t{$i}){
 			$max_t{$i} = 0;
 		}
