@@ -101,6 +101,9 @@ open ($in, "<", $feature_gff) or die "Can't read $feature_gff\n";
 OUTER: while(my $line = <$in>){
     my ($chr, undef, $feature, $s, $e, undef, undef, undef, undef) = split(/\t/, $line);	
 	
+	# temporarily skip if not chr1?
+	next unless $chr eq 'Chr1';
+	
 	# skip chromosome features
 	next if $feature eq 'chromosome';
 
@@ -124,13 +127,44 @@ OUTER: while(my $line = <$in>){
 		$overlaps{$chr}{$feature}{inside}++   if ($overlap == 2);
 
 		if($overlap){
-			print "Overlap $overlap\tJunction:$key vs $feature $s-$e\t$line\n";
+#			print "Overlap $overlap\tJunction:$key vs $feature $s-$e\t$line\n";
 			next OUTER;
 		}
     }
 }
 
 close($in);
+
+
+
+foreach my $chr (keys %overlaps){
+	print "Chr = $chr\n";
+	foreach my $feature (keys %{$overlaps{$chr}}){
+
+		my $count1 = $overlaps{$chr}{$feature}{outside};
+		$count1 = 0 if not defined $count1;
+
+		my $count2 = $overlaps{$chr}{$feature}{spanning};
+		$count2 = 0 if not defined $count2;
+
+		my $count3 = $overlaps{$chr}{$feature}{inside};
+		$count3 = 0 if not defined $count3;
+		
+		print "$feature\toutside $count1\n";
+		print "$feature\tspanning $count2\n";
+		print "$feature\tinside $count3\n\n";
+		
+		my $percent1 = sprintf("%.3f", (($count2 + $count3) / ($count1)) * 100);
+		print "Calc1: Percentage that are inside/spanning = $percent1\n";
+
+		my $percent2 = sprintf("%.3f", (($count2 + $count3) / ($count1 + $count2)) * 100);
+		print "Calc2: Percentage that are inside/spanning = $percent2\n";
+		
+		
+		print "\n\n";
+	}
+}
+
 
 
 __END__
