@@ -169,3 +169,62 @@ finding the entire block.
 
 
 	breakpoint_finder.pl --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.1000.100 --file CGRs_1kb_plots_forkeith.tsv --win_size 20 > test20.tsv 2>errors20 &
+
+
+
+## Overlap analysis ##
+
+Want to compare the locations of our junctions with all known genomic features from TAIRs
+GFF files. 
+
+>*Null hypothesis* - Regions surrounding breakpoints are not enriched for any particular
+genomic feature compared to non-breakpoint regions
+
+### Plan of action ###
+
+1. Take a list of current junction coordinates (2 for each breakpoint) in GFF format
+2. Assemble a master GFF feature file for A. thaliana
+3. For each feature in file 2, compare junctions in file 1 to determine:
+	1. Are there more features (per Kbp) inside junctions than outside junctions?
+	2. May need to shuffle chromosomes to assess significance
+
+Will need to choose threshold for what constitutes a 'junction region' (10 Kbp around 
+junction coordinate?).
+
+
+### Making Master GFF file ###
+
+TAIR has separate GFF files for various features on their FTP (not all in one master file).
+So:
+
+	cat TAIR10_GFF3_genes_transposons.gff TAIR_GFF3_ssrs.gff Gutierrez_DNA_replication_origin_TAIR10_GBROWSE.gff > all_TAIR10_features.gff
+
+How many unique features do we have?
+
+	cut -f 2,3 all_TAIR10_features.gff | sort -u
+	GutierrezLab	DNA_replication_origin
+	TAIR10	CDS
+	TAIR10	chromosome
+	TAIR10	exon
+	TAIR10	five_prime_UTR
+	TAIR10	gene
+	TAIR10	mRNA
+	TAIR10	miRNA
+	TAIR10	ncRNA
+	TAIR10	protein
+	TAIR10	pseudogene
+	TAIR10	pseudogenic_exon
+	TAIR10	pseudogenic_transcript
+	TAIR10	rRNA
+	TAIR10	snRNA
+	TAIR10	snoRNA
+	TAIR10	tRNA
+	TAIR10	three_prime_UTR
+	TAIR10	transposable_element
+	TAIR10	transposable_element_gene
+	TAIR10	transposon_fragment
+	TandemRepeatsFinder_v4.04	satellite
+
+Can reorder master GFF file to sort by chromosome and then coordinate:
+
+	(sort -k1,1 -k4n,4n all_TAIR10_features.gff  > tmp) && mv tmp all_TAIR10_features.gff
