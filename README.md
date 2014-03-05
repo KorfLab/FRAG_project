@@ -228,3 +228,8 @@ How many unique features do we have?
 Can reorder master GFF file to sort by chromosome and then coordinate:
 
 	(sort -k1,1 -k4n,4n all_TAIR10_features.gff  > tmp) && mv tmp all_TAIR10_features.gff
+	
+### Running analysis ### 	
+
+chromosome, rRNA, snRNA features are ignored from analysis (too few of the latter)
+	overlap_between_two_gff_files.pl --junction_gff junctions.gff --feature_gff all_TAIR10_features.gff
