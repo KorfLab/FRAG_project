@@ -60,11 +60,20 @@ $chr_sizes{'Chr3'} = 23459830;
 $chr_sizes{'Chr4'} = 18585056;
 $chr_sizes{'Chr5'} = 26975502;
 
+# where does the tail swap begin on Chr4?
+my $pre_tailswap_length = 16500000;
+
 # will end up representing each chromosome as a string of dashes
 my %chr_seqs;
 # create fake chromosome sequences
 foreach my $chr (qw(Chr1 Chr2 Chr3 Chr4 Chr5)){
 	$chr_seqs{$chr} = '-' x $chr_sizes{$chr};
+	
+	# have to do something different for Chromosome 4 as we are only interested in the 
+	# tail swap region. So mask out first part of chromosome with a different character
+	if($chr eq 'Chr4'){
+		substr($chr_seqs{$chr}, 0, $pre_tailswap_length) = ("x" x $pre_tailswap_length);		
+	}
 }
 
 
@@ -75,10 +84,9 @@ foreach my $chr (qw(Chr1 Chr2 Chr3 Chr4 Chr5)){
 open (my $in, "<", $junction_gff) or die "Can't read $junction_gff\n";
 
 my $tmp = 0;
-my $count = 0;
 while(my $line = <$in>){
     my ($chr, undef, undef, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
-	$count++;
+
 	# coordinate that we use depends on whether this was the left or right edge
 	my $coord;
 	$coord = $s if ($comment =~ m/edge=R/);
@@ -88,23 +96,12 @@ while(my $line = <$in>){
 	my ($min, $max) = ($coord - $bp/2, $coord + $bp/2);
 	
 	# mask where junctions are in chromosome
+#	print "Substituting in chr $chr from $min for $bp bp\n";
 	substr($chr_seqs{$chr}, $min, $bp) = ("J" x $bp);
 
-	# just checking how far away current junction is from previous one
-	# want to know if any junctions overlap (when allowing +/- $bp)
- 	my $distance;
-	if($comment =~ m/edge=R/){
-		$distance = $s - $tmp;	
-		$tmp = $s;
-	} else{
-		$distance = $e - $tmp;
-		$tmp = $e;
-	}
-	#print "$count) Distance = $distance\t$line";
 }
 
 close($in);
-
 
 ##########################################
 # Main loop over each possible feature
@@ -130,17 +127,17 @@ foreach my $desired_gff_feature (@features){
 		# only want to look at one feature at a time
 		next unless $feature eq $desired_gff_feature;
 	
-		# temporarily skip if not chr1?
-		next unless $chr eq 'Chr1';
+		# temporarily skip if not chr1 or chr4?
+		next unless (($chr eq 'Chr1') or ($chr eq 'Chr4'));
 	
-		# skip tailswap region of Chr1
+		# skip tailswap regions of Chr1 and Chr4
 		next if ($chr eq 'Chr1' and $s > $chr_sizes{'Chr1'});
+		next if ($chr eq 'Chr4' and $s < $pre_tailswap_length);
 	
 		# mask where feature occurs in virtual chromosome sequence
 		my $length = $e - $s + 1;
 		substr($tmp_chr_seqs{$chr}, $s, $length) = ("o" x $length);
 	}
-
 	close($in);
 	
 	# now compare patterns in original virtual sequence (just junctions)
@@ -148,9 +145,17 @@ foreach my $desired_gff_feature (@features){
 	my $output_text = "$desired_gff_feature\t";
 
 	my $original_junction_bp      = $chr_seqs{'Chr1'} =~ tr/J/J/;
+	$original_junction_bp        += $chr_seqs{'Chr4'} =~ tr/J/J/;
+
 	my $original_non_junction_bp  = $chr_seqs{'Chr1'} =~ tr/-/-/;
+	$original_non_junction_bp    += $chr_seqs{'Chr4'} =~ tr/-/-/;
+
 	my $remaining_junction_bp     = $tmp_chr_seqs{'Chr1'} =~ tr/J/J/;
+	$remaining_junction_bp       += $tmp_chr_seqs{'Chr4'} =~ tr/J/J/;
+
 	my $remaining_non_junction_bp = $tmp_chr_seqs{'Chr1'} =~ tr/-/-/;
+	$remaining_non_junction_bp   += $tmp_chr_seqs{'Chr4'} =~ tr/-/-/;
+
 
 	my $feature_overlapping_junction     = $original_junction_bp - $remaining_junction_bp;
 	my $feature_overlapping_non_junction = $original_non_junction_bp - $remaining_non_junction_bp;
