@@ -188,8 +188,8 @@ genomic feature compared to non-breakpoint regions
 	1. Are there more features (per Kbp) inside junctions than outside junctions?
 	2. May need to shuffle chromosomes to assess significance
 
-Will need to choose threshold for what constitutes a 'junction region' (10 Kbp around 
-junction coordinate?).
+Will need to choose threshold for what constitutes a 'junction region'. Will start by 
+using 10 Kbp around junction coordinate (5 Kbp each side).
 
 
 ### Making Master GFF file ###
@@ -229,7 +229,47 @@ Can reorder master GFF file to sort by chromosome and then coordinate:
 
 	(sort -k1,1 -k4n,4n all_TAIR10_features.gff  > tmp) && mv tmp all_TAIR10_features.gff
 	
+	
 ### Running analysis ### 	
 
-chromosome, rRNA, snRNA features are ignored from analysis (too few of the latter)
-	overlap_between_two_gff_files.pl --junction_gff junctions.gff --feature_gff all_TAIR10_features.gff
+Certain GFF features (chromosome, rRNA, snRNA) are ignored from analysis.
+
+If running in default mode it will just calculate ratios of bp-of-GFF-feature that overlaps
+junction region vs bp-of-GFF-feature that occur outside junction region.
+
+	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff
+	
+The result will look something like this:
+
+	Ratio	GFF_feature	Inside_junction_overlap	Outside_junction_overlap
+	1.45	DNA_replication_origin	32483/648271 bp (%5.01)	1027907/29711200 bp (%3.46)
+	1.20	three_prime_UTR	33578/648271 bp (%5.18)	1284166/29711200 bp (%4.32)
+	1.20	protein	347914/648271 bp (%53.67)	13251865/29711200 bp (%44.60)
+	1.19	gene	405999/648271 bp (%62.63)	15597770/29711200 bp (%52.50)
+	1.18	CDS	222609/648271 bp (%34.34)	8653725/29711200 bp (%29.13)
+	1.13	mRNA	421893/648271 bp (%65.08)	17156532/29711200 bp (%57.74)
+	1.07	exon	287654/648271 bp (%44.37)	12317229/29711200 bp (%41.46)
+	1.04	miRNA	207/648271 bp (%0.03)	9129/29711200 bp (%0.03)
+	0.99	five_prime_UTR	18016/648271 bp (%2.78)	831111/29711200 bp (%2.80)
+	0.68	satellite	27885/648271 bp (%4.30)	1876037/29711200 bp (%6.31)
+	0.63	ncRNA	2507/648271 bp (%0.39)	181189/29711200 bp (%0.61)
+	0.55	transposon_fragment	59012/648271 bp (%9.10)	4883365/29711200 bp (%16.44)
+	0.55	transposable_element	60168/648271 bp (%9.28)	5011077/29711200 bp (%16.87)
+	0.47	transposable_element_gene	17310/648271 bp (%2.67)	1681100/29711200 bp (%5.66)
+	0.22	tRNA	72/648271 bp (%0.01)	15268/29711200 bp (%0.05)
+	0.22	pseudogenic_exon	1009/648271 bp (%0.16)	206478/29711200 bp (%0.69)
+	0.21	pseudogene	1009/648271 bp (%0.16)	224494/29711200 bp (%0.76)
+	0.21	pseudogenic_transcript	1009/648271 bp (%0.16)	224494/29711200 bp (%0.76)
+	0.00	snoRNA	0/648271 bp (%0.00)	2174/29711200 bp (%0.01)
+
+This suggests that DNA replication origins are 1.45 x more likely to occur inside junction
+regions that outside junction regions (in FRAG00062). Other GFF features are also over/under
+represented in junction regions.
+
+Now to include shuffling to see whether we see similar ratios when we randomize the location
+of all of the breakpoints (for the tailswap region we allow the possibility of all junctions 
+occurring in Chr1, or Chr4, or any combination of both).
+
+	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_junction_output.tsv
+	
+	
