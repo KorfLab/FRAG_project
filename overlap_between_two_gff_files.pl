@@ -287,7 +287,7 @@ sub read_junction_data{
 		$number_of_junctions++;
 		
 		# coordinate that we use depends on whether this was the left or right edge
-		my $coord;
+		my $coord = $s;
 		$coord = $s if ($comment =~ m/edge=R/);
 		$coord = $e if ($comment =~ m/edge=L/);
 	

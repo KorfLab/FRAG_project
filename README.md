@@ -271,5 +271,102 @@ of all of the breakpoints (for the tailswap region we allow the possibility of a
 occurring in Chr1, or Chr4, or any combination of both).
 
 	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_junction_output.tsv
+
+Shuffling results suggest that enrichment of gene features in junction regions is 
+significant, but enrichment of DNA replication origins is not. For each feature, the 
+table below shows how many times (out of a 1000 shuffles of the junction coordinates),
+the observed ratio in the real data was exceeded, equalled, or not exceeded.
+
+	DNA_replication_origin	1.4483	289	0	711
+	protein	1.2033	0	0	1000
+	three_prime_UTR	1.1984	26	1	973
+	gene	1.1930	0	0	1000
+	CDS	1.1790	0	0	1000
+	mRNA	1.1270	7	0	993
+	exon	1.0703	120	1	879
+	miRNA	1.0392	226	1	773
+	five_prime_UTR	0.9935	529	1	470
+	satellite	0.6812	998	0	2
+	ncRNA	0.6341	666	0	334
+	transposon_fragment	0.5538	1000	0	0
+	transposable_element	0.5503	1000	0	0
+	transposable_element_gene	0.4719	996	0	4
+	pseudogenic_exon	0.2240	924	0	76
+	tRNA	0.2161	819	0	181
+	pseudogenic_transcript	0.2060	931	0	69
+	pseudogene	0.2060	931	0	69
+	snoRNA	0.0000	358	642	0
+
+### Checking gene orientation ###
+
+At this point we realized that we would like to know whether the enrichment of genes 
+inside junction regions followed any pattern. I.e. are there more likely to be convergently
+transcribed genes (hence more 3' UTRs) than divergently or tandemly transcribed genes.
+
+I put only gene features from all_TAIR10_feature.gff into a new file (genes.gff) and made
+a new script to test this:
+
+	./check_gene_orientation.pl --junction_gff junctions_FRAG00062.gff --feature_gff genes.gff
 	
+This revealed that across the entire genome, (protein-coding) gene orientation is 
+effectively random (as expected):
+
+	>>      6987    %25.82
+	<>      6508    %24.05
+	<<      7058    %26.08
+	><      6508    %24.05
 	
+I then looked at genes inside junction regions. The breakpoint itself can either be in a 
+gene or between genes:
+
+	>>>|>>> 18      %24.32
+	<<<|<<< 26      %35.14	
+	>>>---|--->>>   6       %8.11
+	<<<---|---<<<   9       %12.16
+	>>>---|---<<<   4       %5.41
+	<<<---|--->>>   11      %14.86
+	
+So 44 out of 74 breakpoints are inside genes. The remaining 30 show a slight increase
+towards being between divergently transcribed genes, but can't do much with small data size.
+
+
+### New nomenclature and data formats needed ###
+
+Decided to work on reorganizing our data to make it easier going forward. To clarify, we
+have contigs/blocks representing duplicated (or triplicated regions). We can represent
+them using the Sequence Ontology term 'copy_number_gain' (SO:0001742):
+
+http://www.sequenceontology.org/browser/current_svn/term/SO:0001742
+
+Each block has two ends which define breakpoints. These can be represented with the
+Sequence Ontology term 'chromosome_breakpoint' (SO:0001021):
+
+http://www.sequenceontology.org/browser/current_svn/term/SO:0001021 
+
+Each breakpoint has a connected breakpoint (the end of another duplicated block). In most
+cases these pairs of breakpoints will contain intervening sequence that is not present
+in the reference. Collectively, a pair of breakpoints (and inserted sequence) defines a 
+junction. These could potentially also be represented in Sequence Ontology terms with
+'insertion_site' (SO:0000366):
+
+http://www.sequenceontology.org/browser/current_svn/term/SO:0000366
+
+We now need anonymous (and unique) identifiers for blocks, breakpoints and junctions. 
+E.g. block0001, breakpoint0001 etc. Each block (copy_number_gain) should connect to two
+breakpoint objects, and each breakpoint should have a parent block ID, and a paired 
+breakpoint ID. Both blocks and breakpoints will be stored in a single GFF file. 
+
+Junctions will point to the flanking breakpoint IDs but will probably not be stored in a 
+GFF file (we could list the pair of insertion sites...which will be the same 
+coordinates as the breakpoints, but it gets confusing when we are dealing with sequences
+that differ from the reference genome). We'll use a spreadsheet instead so that we can 
+store the sequence that occurs in junction regions.
+
+	##gff-version 3
+	##species http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=3702
+	##genome-build TAIR TAIR10
+	#Data from A. thaliana line FRAG00062
+	Chr1	PRICE	chromosome_breakpoint	500	500  .  +  .  ID=breakpoint0001;Parent=block0001;Note="unpaired with other breakpoints"
+	Chr1	t_test.pl	copy_number_gain	500	205575  .  +  .  ID=block0001;Name=01a1_01a2;Note="flanked by breakpoint0001 and breakpoint0002","duplicated block"
+	Chr1	PRICE	chromosome_breakpoint	205575	205575  .  +  .  ID=breakpoint0002;Parent=block0001;Note="paired with breakpoint0003"
+	Chr1	PRICE	chromosome_breakpoint	205576	205576  .  +  .  ID=breakpoint0003;Parent=block0002;Note="paired with breakpoint0002"
