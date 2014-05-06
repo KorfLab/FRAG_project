@@ -297,6 +297,14 @@ the observed ratio in the real data was exceeded, equalled, or not exceeded.
 	pseudogene	0.2060	931	0	69
 	snoRNA	0.0000	358	642	0
 
+
+Now updating this analysis with more data (90 breakpoints). Note new names of command-line
+options. Two runs with different sizes of breakpoint regions (1 & 10 Kbp):
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 1000 > FRAG00062_breakpoints_s1000_L1000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose > FRAG00062_breakpoints_s1000_L10000.tsv
+
+
 ### Checking gene orientation ###
 
 At this point we realized that we would like to know whether the enrichment of genes 
@@ -326,8 +334,21 @@ gene or between genes:
 	>>>---|---<<<   4       %5.41
 	<<<---|--->>>   11      %14.86
 	
-So 44 out of 74 breakpoints are inside genes. The remaining 30 show a slight increase
-towards being between divergently transcribed genes, but can't do much with small data size.
+So 44 out of 74 breakpoints (59%) are inside genes. The remaining 30 show a slight increase
+towards being between divergently transcribed genes (37% (11/30) of all intergenic 
+breakpoints), but can't do much with small data size.
+
+Re-ran this script with newer breakpoint data for FRAG00062 (now with 90 breakpoints):
+
+	>>>|>>>	25	%27.78
+	<<<|<<<	31	%34.44
+	>>>---|---<<<	4	%4.44
+	<<<---|---<<<	8	%8.89
+	<<<---|--->>>	14	%15.56
+	>>>---|--->>>	8	%8.89
+
+Breakpoints inside genes now up to 62% of all breakpoints (56/90) and those that are inside
+divergently transcribed genes now up to 41% (14/34).
 
 
 ### New nomenclature and data formats needed ###
@@ -362,11 +383,49 @@ coordinates as the breakpoints, but it gets confusing when we are dealing with s
 that differ from the reference genome). We'll use a spreadsheet instead so that we can 
 store the sequence that occurs in junction regions.
 
+
 	##gff-version 3
 	##species http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=3702
 	##genome-build TAIR TAIR10
 	#Data from A. thaliana line FRAG00062
-	Chr1	PRICE	chromosome_breakpoint	500	500  .  +  .  ID=breakpoint0001;Parent=block0001;Note="unpaired with other breakpoints"
-	Chr1	t_test.pl	copy_number_gain	500	205575  .  +  .  ID=block0001;Name=01a1_01a2;Note="flanked by breakpoint0001 and breakpoint0002","duplicated block"
-	Chr1	PRICE	chromosome_breakpoint	205575	205575  .  +  .  ID=breakpoint0002;Parent=block0001;Note="paired with breakpoint0003"
-	Chr1	PRICE	chromosome_breakpoint	205576	205576  .  +  .  ID=breakpoint0003;Parent=block0002;Note="paired with breakpoint0002"
+	#Generated 20140402
+	Chr1	t_test.pl	copy_number_gain	1	205575	.	+	.	ID=block0001;Name=01a1_01a2;Note="duplicated block"
+	Chr1	PRICE	chromosome_breakpoint	1	1	.	.	.	ID=breakpoint0001;Parent=block0001;Name=01a1;Note="telomeric end"
+	Chr1	PRICE	chromosome_breakpoint	205575	205575	.	-	.	ID=breakpoint0002;Parent=block0001;Name=01a2;Note="paired with breakpoint0033"
+	Chr1	t_test.pl	copy_number_gain	31632	87466	.	+	.	ID=block0002;Name=01b1_01b2;Note="triplicated block"
+	Chr1	PRICE	chromosome_breakpoint	31632	31632	.	-	.	ID=breakpoint0003;Parent=block0002;Name=01b1;Note="paired with breakpoint0087"
+
+
+## Data on nearest feature to each breakpoint ##
+
+Using new GFF file, I wrote a script to calculate the average distance of any genomic feature
+to each breakpoint. I.e. for every breakpoint find nearest gene/UTR/satellite etc. Then 
+average nearest distances across all breakpoints. 
+
+	./nearest_feature.pl --junction_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff
+
+	Feature	Average_distance_to_nearest_breakpoint	Standard_deviation	Number_of_features
+	satellite	380	478	73112
+	exon	604	1193	57589
+	CDS	911	2246	53113
+	mRNA	952	1214	9953
+	protein	1195	2215	9271
+	protein_coding_gene	1218	2195	7092
+	three_prime_UTR	2104	2796	8185
+	five_prime_UTR	2356	3058	9224
+	transposable_element	6257	8084	7107
+	transposon_fragment	6257	8084	7858
+	non_protein_coding_gene	44014	33069	432
+	DNA_replication_origin	44476	58616	376
+	ncRNA	108457	98168	149
+	pseudogene	136192	279742	233
+	pseudogenic_exon	136192	279742	327
+	pseudogenic_transcript	136192	279742	233
+	transposable_element_gene	142647	166882	681
+	tRNA	157066	153789	236
+	miRNA	254926	247939	49
+	snoRNA	2082570	2450550	22
+
+Results are probably biased towards higher density of certain features. I.e. breakpoints
+are most likely to be nearest a satellite feature, but there are more satellite features
+than anything else.

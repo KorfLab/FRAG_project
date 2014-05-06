@@ -19,11 +19,11 @@ use Getopt::Long;
 #              Command-line options                  #
 ###################################################### 
 
-my ($junction_gff, $feature_gff, $bp, $shuffles, $help, $verbose) = (undef, undef, 10000, 0, undef, undef);
+my ($breakpoint_gff, $feature_gff, $bp, $shuffles, $help, $verbose) = (undef, undef, 10000, 0, undef, undef);
 
 my $usage = "$0 
 Mandatory arguments:
---junction_gff <gff file of breakpoint junction coordinates> 
+--breakpoint_gff <gff file of breakpoint junction coordinates> 
 --feature_gff <master GFF file of all TAIR10 features>
 
 Optional arguments:
@@ -35,17 +35,17 @@ Optional arguments:
 ";
 
 GetOptions (
-	"junction_gff=s" => \$junction_gff,
-	"feature_gff=s"  => \$feature_gff,
-	"bp=i"           => \$bp,
-	"shuffles=i"     => \$shuffles,
-	"help"           => \$help,
-	"verbose"        => \$verbose,
+	"breakpoint_gff=s" => \$breakpoint_gff,
+	"feature_gff=s"    => \$feature_gff,
+	"bp=i"             => \$bp,
+	"shuffles=i"       => \$shuffles,
+	"help"             => \$help,
+	"verbose"          => \$verbose,
 );
 
 
 die $usage if ($help);
-die $usage if (not defined $junction_gff);
+die $usage if (not defined $breakpoint_gff);
 die $usage if (not defined $feature_gff);
 
 
@@ -68,14 +68,9 @@ my $pre_tailswap_length = 16541500; # coordinate from Han
 # will end up representing each chromosome as a string of dashes
 my %chr_seqs;
 
-# for the main run and each shuffle, we will need to generate a fake 
-# string corresponding to the length of each chromosome
-initalize_virtual_chromosome_sequences();
-
-# will need to keep track of how many junctions there are, 
+# will need to keep track of how many breakpoints there are, 
 # this will be important for when we shuffle data later on
-my $number_of_junctions = 0;
-
+my $number_of_breakpoints = 0;
 
 
 ####################################
@@ -92,18 +87,19 @@ my %final_ratios;
 # (as denoted by $shuffles)
 for (my $i = 0; $i <= $shuffles; $i++){
 
+	# for the main run and each shuffle, we will need to generate a fake 
+	# string corresponding to the length of each chromosome
+	initalize_virtual_chromosome_sequences();
+
 	if ($i == 0){
 		warn "Main run with unshuffled data\n";
-		# read main junction data and modify %chr_seqs hash accordingly
-		read_junction_data();
+		# read main breakpoint data and modify %chr_seqs hash accordingly
+		read_breakpoint_data();
 	} else{
 		warn "Shuffle $i\n";
-		
-		# reinitialize virtual chromosome sequences
-		initalize_virtual_chromosome_sequences();
-
+	
 		# need to shuffle location of junctions
-		shuffle_junctions();
+		shuffle_breakpoints();
 	}
 
 	##########################################
@@ -118,7 +114,8 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	my @features = qw(CDS DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
 
 	foreach my $desired_gff_feature (@features){
-
+		warn "\tProcessing $desired_gff_feature data\n" if ($verbose);
+		
 		# create copies of virtual chromosome sequences
 		my %tmp_chr_seqs = %chr_seqs;
 
@@ -148,53 +145,53 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		}
 		close($in);
 	
-		# possible that we will get here without seeing any of the desire feature
+		# possible that we will get here without seeing any of the desired features
 		# (depending on what input GFF is used), so skip if $feature_count == 0
 		next if ($feature_count == 0);
 	
 	
-		# now compare patterns in original virtual sequence (just junctions)
+		# now compare patterns in original virtual sequence (just breakpoints)
 		# and tmp virtual sequence (masked with feature)
 		my $output_text = "$desired_gff_feature\t";
 
-		my $original_junction_bp      = $chr_seqs{'Chr1'} =~ tr/J/J/;
-		$original_junction_bp        += $chr_seqs{'Chr4'} =~ tr/J/J/;
+		my $original_breakpoint_bp      = $chr_seqs{'Chr1'} =~ tr/B/B/;
+		$original_breakpoint_bp        += $chr_seqs{'Chr4'} =~ tr/B/B/;
 
-		my $original_non_junction_bp  = $chr_seqs{'Chr1'} =~ tr/-/-/;
-		$original_non_junction_bp    += $chr_seqs{'Chr4'} =~ tr/-/-/;
+		my $original_non_breakpoint_bp  = $chr_seqs{'Chr1'} =~ tr/-/-/;
+		$original_non_breakpoint_bp    += $chr_seqs{'Chr4'} =~ tr/-/-/;
 
-		my $remaining_junction_bp     = $tmp_chr_seqs{'Chr1'} =~ tr/J/J/;
-		$remaining_junction_bp       += $tmp_chr_seqs{'Chr4'} =~ tr/J/J/;
+		my $remaining_breakpoint_bp     = $tmp_chr_seqs{'Chr1'} =~ tr/B/B/;
+		$remaining_breakpoint_bp       += $tmp_chr_seqs{'Chr4'} =~ tr/B/B/;
 
-		my $remaining_non_junction_bp = $tmp_chr_seqs{'Chr1'} =~ tr/-/-/;
-		$remaining_non_junction_bp   += $tmp_chr_seqs{'Chr4'} =~ tr/-/-/;
+		my $remaining_non_breakpoint_bp = $tmp_chr_seqs{'Chr1'} =~ tr/-/-/;
+		$remaining_non_breakpoint_bp   += $tmp_chr_seqs{'Chr4'} =~ tr/-/-/;
 
-#		print "$desired_gff_feature\t$original_junction_bp\t$original_non_junction_bp\t$remaining_junction_bp\t$remaining_non_junction_bp\n";
+#		print "$desired_gff_feature\t$original_breakpoint_bp\t$original_non_breakpoint_bp\t$remaining_breakpoint_bp\t$remaining_non_breakpoint_bp\n";
 	
-		my $feature_overlapping_junction     = $original_junction_bp - $remaining_junction_bp;
-		my $feature_overlapping_non_junction = $original_non_junction_bp - $remaining_non_junction_bp;
+		my $feature_overlapping_breakpoint_regions     = $original_breakpoint_bp - $remaining_breakpoint_bp;
+		my $feature_overlapping_non_breakpoint_regions = $original_non_breakpoint_bp - $remaining_non_breakpoint_bp;
 
 		# likely to have some zero counts for bases overlapping junction regions, so handle accordingly
-		my ($percent_overlapping_junction, $percent_overlapping_non_junction);
+		my ($percent_overlapping_breakpoint_regions, $percent_overlapping_non_breakpoint_regions);
 	
-		if ($feature_overlapping_junction == 0){
-			$percent_overlapping_junction = "0";
+		if ($feature_overlapping_breakpoint_regions == 0){
+			$percent_overlapping_breakpoint_regions = "0";
 		} else{
-			$percent_overlapping_junction = ($feature_overlapping_junction / $original_junction_bp) * 100;
+			$percent_overlapping_breakpoint_regions = ($feature_overlapping_breakpoint_regions / $original_breakpoint_bp) * 100;
 		}
 	
-		if ($feature_overlapping_non_junction == 0){
-			$percent_overlapping_non_junction = "0";
+		if ($feature_overlapping_non_breakpoint_regions == 0){
+			$percent_overlapping_non_breakpoint_regions = "0";
 		} else{
-			$percent_overlapping_non_junction = ($feature_overlapping_non_junction / $original_non_junction_bp) * 100;
+			$percent_overlapping_non_breakpoint_regions = ($feature_overlapping_non_breakpoint_regions / $original_non_breakpoint_bp) * 100;
 		}
 	
-		my $ratio = sprintf("%.4f", $percent_overlapping_junction / $percent_overlapping_non_junction);
-		$percent_overlapping_junction     = sprintf("%.2f", $percent_overlapping_junction);
-		$percent_overlapping_non_junction = sprintf("%.2f", $percent_overlapping_non_junction);
+		my $ratio = sprintf("%.4f", $percent_overlapping_breakpoint_regions / $percent_overlapping_non_breakpoint_regions);
+		$percent_overlapping_breakpoint_regions     = sprintf("%.2f", $percent_overlapping_breakpoint_regions);
+		$percent_overlapping_non_breakpoint_regions = sprintf("%.2f", $percent_overlapping_non_breakpoint_regions);
 		
-		$output_text .= "$feature_overlapping_junction/$original_junction_bp bp (%$percent_overlapping_junction)\t";
-		$output_text .= "$feature_overlapping_non_junction/$original_non_junction_bp bp (%$percent_overlapping_non_junction)";
+		$output_text .= "$feature_overlapping_breakpoint_regions/$original_breakpoint_bp bp (%$percent_overlapping_breakpoint_regions)\t";
+		$output_text .= "$feature_overlapping_non_breakpoint_regions/$original_non_breakpoint_bp bp (%$percent_overlapping_non_breakpoint_regions)";
 
 		$results_by_ratio{$output_text} = $ratio;
 
@@ -215,7 +212,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 
 	# this part only happens in main run with real (unshuffled) data
 	if ($i == 0){
-		print "Ratio\tGFF_feature\tInside_junction_overlap\tOutside_junction_overlap\n";
+		print "Ratio\tGFF_feature\tInside_breakpoint_overlap\tOutside_breakpoint_overlap\n";
 		foreach my $result (sort {$results_by_ratio{$b} <=> $results_by_ratio{$a}} keys %results_by_ratio){
 			print "$results_by_ratio{$result}\t$result\n";
 
@@ -260,7 +257,7 @@ exit;
 #
 ####################################
 
-# create fake chromosome sequences
+# create fake chromosome sequences as strings of '-'
 sub initalize_virtual_chromosome_sequences{
 	foreach my $chr (qw(Chr1 Chr2 Chr3 Chr4 Chr5)){
 		$chr_seqs{$chr} = '-' x $chr_sizes{$chr};
@@ -278,28 +275,29 @@ sub initalize_virtual_chromosome_sequences{
 # read junction coordinates and represent in virtual sequences
 ###############################################################
 
-sub read_junction_data{
-	open (my $in, "<", $junction_gff) or die "Can't read $junction_gff\n";
+sub read_breakpoint_data{
+	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
 
 	while(my $line = <$in>){
-		my ($chr, undef, undef, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
+		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
 
-		$number_of_junctions++;
-		
-		# coordinate that we use depends on whether this was the left or right edge
-		my $coord = $s;
-		$coord = $s if ($comment =~ m/edge=R/);
-		$coord = $e if ($comment =~ m/edge=L/);
+		# skip comments
+		next if ($line =~ m/^#/);
+
+		# want chromosome breakpoints, but ignore any which are effectively the ends of
+		# the chromosomes
+		next unless ($feature eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
+
+		$number_of_breakpoints++;
+			
+		# now define a region around this breakpoint based on value of $bp
+		my ($min, $max) = ($s - $bp/2, $s + $bp/2);
 	
-		# now define a range around this coordinate based on value of $bp
-		my ($min, $max) = ($coord - $bp/2, $coord + $bp/2);
-	
-		# mask where junctions are in chromosome
-		substr($chr_seqs{$chr}, $min, $bp) = ("J" x $bp);
+		# mask where breakpoint regions are in chromosome
+		substr($chr_seqs{$chr}, $min, $bp) = ("B" x $bp);
 	}
 
 	close($in);
-
 }
 
 
@@ -308,14 +306,14 @@ sub read_junction_data{
 # randomly shuffle junction coordinates
 ###############################################################
 
-sub shuffle_junctions{
+sub shuffle_breakpoints{
 
-	for (my $i = 0; $i < $number_of_junctions; $i++){
+	for (my $i = 0; $i < $number_of_breakpoints; $i++){
 	
 		my $random_coord = int(rand($chr_sizes{'Chr4'}));
 		
 		
-		# now define a range around this coordinate based on value of $bp
+		# now define a region around this breakpoint coordinate based on value of $bp
 		my ($min, $max) = ($random_coord - $bp/2, $random_coord + $bp/2);
 	
 		# which chromosome to modify depends on whether the random coordinate
@@ -336,8 +334,8 @@ sub shuffle_junctions{
 			redo;
 		}
 		
-		# mask where junctions are in chromosome
-		substr($chr_seqs{$chr}, $min, $bp) = ("J" x $bp);
+		# mask where breakpoint regions are in chromosome
+		substr($chr_seqs{$chr}, $min, $bp) = ("B" x $bp);
 	}
 
 }
