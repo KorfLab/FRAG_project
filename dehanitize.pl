@@ -43,19 +43,23 @@ open(my $in, "<", "$input") or die "Can't read from $input\n";
 # read lines in pairs
 while(my $first_line = <$in>){
 
+	# skip potential header line
+	next if ($first_line =~ m/^Block/);
+	
 	# skip unbalanced lines
-	next if $first_line =~ m/03c/;
-	next if $first_line =~ m/15c/;
+#	next if $first_line =~ m/03c/;
+	next if $first_line =~ m/21a1/;
 
 	my $second_line = <$in>;
 	chomp($first_line, $second_line);
 	
-#	print "1) $first_line\n2) $second_line\n";
+#	print "\n1) $first_line\n2) $second_line\n";
 	
 	# split two lines into separate, unique, variables
-	my ($han_id, $chr, $start) = split(/,/, $first_line);
-	my (undef, undef, $end)    = split(/,/, $second_line);
+	my ($han_id, $chr, $start) = split(/\t/, $first_line);
+	my (undef, undef, $end)    = split(/\t/, $second_line);
 	
+
 	# trim trailing digit from Han's ID
 	$han_id =~ s/[12]$//;
 

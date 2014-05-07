@@ -169,3 +169,263 @@ finding the entire block.
 
 
 	breakpoint_finder.pl --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.1000.100 --file CGRs_1kb_plots_forkeith.tsv --win_size 20 > test20.tsv 2>errors20 &
+
+
+
+## Overlap analysis ##
+
+Want to compare the locations of our junctions with all known genomic features from TAIRs
+GFF files. 
+
+>*Null hypothesis* - Regions surrounding breakpoints are not enriched for any particular
+genomic feature compared to non-breakpoint regions
+
+### Plan of action ###
+
+1. Take a list of current junction coordinates (2 for each breakpoint) in GFF format
+2. Assemble a master GFF feature file for A. thaliana
+3. For each feature in file 2, compare junctions in file 1 to determine:
+	1. Are there more features (per Kbp) inside junctions than outside junctions?
+	2. May need to shuffle chromosomes to assess significance
+
+Will need to choose threshold for what constitutes a 'junction region'. Will start by 
+using 10 Kbp around junction coordinate (5 Kbp each side).
+
+
+### Making Master GFF file ###
+
+TAIR has separate GFF files for various features on their FTP (not all in one master file).
+So:
+
+	cat TAIR10_GFF3_genes_transposons.gff TAIR_GFF3_ssrs.gff Gutierrez_DNA_replication_origin_TAIR10_GBROWSE.gff > all_TAIR10_features.gff
+
+How many unique features do we have?
+
+	cut -f 2,3 all_TAIR10_features.gff | sort -u
+	GutierrezLab	DNA_replication_origin
+	TAIR10	CDS
+	TAIR10	chromosome
+	TAIR10	exon
+	TAIR10	five_prime_UTR
+	TAIR10	gene
+	TAIR10	mRNA
+	TAIR10	miRNA
+	TAIR10	ncRNA
+	TAIR10	protein
+	TAIR10	pseudogene
+	TAIR10	pseudogenic_exon
+	TAIR10	pseudogenic_transcript
+	TAIR10	rRNA
+	TAIR10	snRNA
+	TAIR10	snoRNA
+	TAIR10	tRNA
+	TAIR10	three_prime_UTR
+	TAIR10	transposable_element
+	TAIR10	transposable_element_gene
+	TAIR10	transposon_fragment
+	TandemRepeatsFinder_v4.04	satellite
+
+Can reorder master GFF file to sort by chromosome and then coordinate:
+
+	(sort -k1,1 -k4n,4n all_TAIR10_features.gff  > tmp) && mv tmp all_TAIR10_features.gff
+	
+	
+### Running analysis ### 	
+
+Certain GFF features (chromosome, rRNA, snRNA) are ignored from analysis.
+
+If running in default mode it will just calculate ratios of bp-of-GFF-feature that overlaps
+junction region vs bp-of-GFF-feature that occur outside junction region.
+
+	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff
+	
+The result will look something like this:
+
+	Ratio	GFF_feature	Inside_junction_overlap	Outside_junction_overlap
+	1.45	DNA_replication_origin	32483/648271 bp (%5.01)	1027907/29711200 bp (%3.46)
+	1.20	three_prime_UTR	33578/648271 bp (%5.18)	1284166/29711200 bp (%4.32)
+	1.20	protein	347914/648271 bp (%53.67)	13251865/29711200 bp (%44.60)
+	1.19	gene	405999/648271 bp (%62.63)	15597770/29711200 bp (%52.50)
+	1.18	CDS	222609/648271 bp (%34.34)	8653725/29711200 bp (%29.13)
+	1.13	mRNA	421893/648271 bp (%65.08)	17156532/29711200 bp (%57.74)
+	1.07	exon	287654/648271 bp (%44.37)	12317229/29711200 bp (%41.46)
+	1.04	miRNA	207/648271 bp (%0.03)	9129/29711200 bp (%0.03)
+	0.99	five_prime_UTR	18016/648271 bp (%2.78)	831111/29711200 bp (%2.80)
+	0.68	satellite	27885/648271 bp (%4.30)	1876037/29711200 bp (%6.31)
+	0.63	ncRNA	2507/648271 bp (%0.39)	181189/29711200 bp (%0.61)
+	0.55	transposon_fragment	59012/648271 bp (%9.10)	4883365/29711200 bp (%16.44)
+	0.55	transposable_element	60168/648271 bp (%9.28)	5011077/29711200 bp (%16.87)
+	0.47	transposable_element_gene	17310/648271 bp (%2.67)	1681100/29711200 bp (%5.66)
+	0.22	tRNA	72/648271 bp (%0.01)	15268/29711200 bp (%0.05)
+	0.22	pseudogenic_exon	1009/648271 bp (%0.16)	206478/29711200 bp (%0.69)
+	0.21	pseudogene	1009/648271 bp (%0.16)	224494/29711200 bp (%0.76)
+	0.21	pseudogenic_transcript	1009/648271 bp (%0.16)	224494/29711200 bp (%0.76)
+	0.00	snoRNA	0/648271 bp (%0.00)	2174/29711200 bp (%0.01)
+
+This suggests that DNA replication origins are 1.45 x more likely to occur inside junction
+regions that outside junction regions (in FRAG00062). Other GFF features are also over/under
+represented in junction regions.
+
+Now to include shuffling to see whether we see similar ratios when we randomize the location
+of all of the breakpoints (for the tailswap region we allow the possibility of all junctions 
+occurring in Chr1, or Chr4, or any combination of both).
+
+	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_junction_output.tsv
+
+Shuffling results suggest that enrichment of gene features in junction regions is 
+significant, but enrichment of DNA replication origins is not. For each feature, the 
+table below shows how many times (out of a 1000 shuffles of the junction coordinates),
+the observed ratio in the real data was exceeded, equalled, or not exceeded.
+
+	DNA_replication_origin	1.4483	289	0	711
+	protein	1.2033	0	0	1000
+	three_prime_UTR	1.1984	26	1	973
+	gene	1.1930	0	0	1000
+	CDS	1.1790	0	0	1000
+	mRNA	1.1270	7	0	993
+	exon	1.0703	120	1	879
+	miRNA	1.0392	226	1	773
+	five_prime_UTR	0.9935	529	1	470
+	satellite	0.6812	998	0	2
+	ncRNA	0.6341	666	0	334
+	transposon_fragment	0.5538	1000	0	0
+	transposable_element	0.5503	1000	0	0
+	transposable_element_gene	0.4719	996	0	4
+	pseudogenic_exon	0.2240	924	0	76
+	tRNA	0.2161	819	0	181
+	pseudogenic_transcript	0.2060	931	0	69
+	pseudogene	0.2060	931	0	69
+	snoRNA	0.0000	358	642	0
+
+
+Now updating this analysis with more data (90 breakpoints). Note new names of command-line
+options. Two runs with different sizes of breakpoint regions (1 & 10 Kbp):
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 1000 > FRAG00062_breakpoints_s1000_L1000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose > FRAG00062_breakpoints_s1000_L10000.tsv
+
+
+### Checking gene orientation ###
+
+At this point we realized that we would like to know whether the enrichment of genes 
+inside junction regions followed any pattern. I.e. are there more likely to be convergently
+transcribed genes (hence more 3' UTRs) than divergently or tandemly transcribed genes.
+
+I put only gene features from all_TAIR10_feature.gff into a new file (genes.gff) and made
+a new script to test this:
+
+	./check_gene_orientation.pl --junction_gff junctions_FRAG00062.gff --feature_gff genes.gff
+	
+This revealed that across the entire genome, (protein-coding) gene orientation is 
+effectively random (as expected):
+
+	>>      6987    %25.82
+	<>      6508    %24.05
+	<<      7058    %26.08
+	><      6508    %24.05
+	
+I then looked at genes inside junction regions. The breakpoint itself can either be in a 
+gene or between genes:
+
+	>>>|>>> 18      %24.32
+	<<<|<<< 26      %35.14	
+	>>>---|--->>>   6       %8.11
+	<<<---|---<<<   9       %12.16
+	>>>---|---<<<   4       %5.41
+	<<<---|--->>>   11      %14.86
+	
+So 44 out of 74 breakpoints (59%) are inside genes. The remaining 30 show a slight increase
+towards being between divergently transcribed genes (37% (11/30) of all intergenic 
+breakpoints), but can't do much with small data size.
+
+Re-ran this script with newer breakpoint data for FRAG00062 (now with 90 breakpoints):
+
+	>>>|>>>	25	%27.78
+	<<<|<<<	31	%34.44
+	>>>---|---<<<	4	%4.44
+	<<<---|---<<<	8	%8.89
+	<<<---|--->>>	14	%15.56
+	>>>---|--->>>	8	%8.89
+
+Breakpoints inside genes now up to 62% of all breakpoints (56/90) and those that are inside
+divergently transcribed genes now up to 41% (14/34).
+
+
+### New nomenclature and data formats needed ###
+
+Decided to work on reorganizing our data to make it easier going forward. To clarify, we
+have contigs/blocks representing duplicated (or triplicated regions). We can represent
+them using the Sequence Ontology term 'copy_number_gain' (SO:0001742):
+
+http://www.sequenceontology.org/browser/current_svn/term/SO:0001742
+
+Each block has two ends which define breakpoints. These can be represented with the
+Sequence Ontology term 'chromosome_breakpoint' (SO:0001021):
+
+http://www.sequenceontology.org/browser/current_svn/term/SO:0001021 
+
+Each breakpoint has a connected breakpoint (the end of another duplicated block). In most
+cases these pairs of breakpoints will contain intervening sequence that is not present
+in the reference. Collectively, a pair of breakpoints (and inserted sequence) defines a 
+junction. These could potentially also be represented in Sequence Ontology terms with
+'insertion_site' (SO:0000366):
+
+http://www.sequenceontology.org/browser/current_svn/term/SO:0000366
+
+We now need anonymous (and unique) identifiers for blocks, breakpoints and junctions. 
+E.g. block0001, breakpoint0001 etc. Each block (copy_number_gain) should connect to two
+breakpoint objects, and each breakpoint should have a parent block ID, and a paired 
+breakpoint ID. Both blocks and breakpoints will be stored in a single GFF file. 
+
+Junctions will point to the flanking breakpoint IDs but will probably not be stored in a 
+GFF file (we could list the pair of insertion sites...which will be the same 
+coordinates as the breakpoints, but it gets confusing when we are dealing with sequences
+that differ from the reference genome). We'll use a spreadsheet instead so that we can 
+store the sequence that occurs in junction regions.
+
+
+	##gff-version 3
+	##species http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=3702
+	##genome-build TAIR TAIR10
+	#Data from A. thaliana line FRAG00062
+	#Generated 20140402
+	Chr1	t_test.pl	copy_number_gain	1	205575	.	+	.	ID=block0001;Name=01a1_01a2;Note="duplicated block"
+	Chr1	PRICE	chromosome_breakpoint	1	1	.	.	.	ID=breakpoint0001;Parent=block0001;Name=01a1;Note="telomeric end"
+	Chr1	PRICE	chromosome_breakpoint	205575	205575	.	-	.	ID=breakpoint0002;Parent=block0001;Name=01a2;Note="paired with breakpoint0033"
+	Chr1	t_test.pl	copy_number_gain	31632	87466	.	+	.	ID=block0002;Name=01b1_01b2;Note="triplicated block"
+	Chr1	PRICE	chromosome_breakpoint	31632	31632	.	-	.	ID=breakpoint0003;Parent=block0002;Name=01b1;Note="paired with breakpoint0087"
+
+
+## Data on nearest feature to each breakpoint ##
+
+Using new GFF file, I wrote a script to calculate the average distance of any genomic feature
+to each breakpoint. I.e. for every breakpoint find nearest gene/UTR/satellite etc. Then 
+average nearest distances across all breakpoints. 
+
+	./nearest_feature.pl --junction_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff
+
+	Feature	Average_distance_to_nearest_breakpoint	Standard_deviation	Number_of_features
+	satellite	380	478	73112
+	exon	604	1193	57589
+	CDS	911	2246	53113
+	mRNA	952	1214	9953
+	protein	1195	2215	9271
+	protein_coding_gene	1218	2195	7092
+	three_prime_UTR	2104	2796	8185
+	five_prime_UTR	2356	3058	9224
+	transposable_element	6257	8084	7107
+	transposon_fragment	6257	8084	7858
+	non_protein_coding_gene	44014	33069	432
+	DNA_replication_origin	44476	58616	376
+	ncRNA	108457	98168	149
+	pseudogene	136192	279742	233
+	pseudogenic_exon	136192	279742	327
+	pseudogenic_transcript	136192	279742	233
+	transposable_element_gene	142647	166882	681
+	tRNA	157066	153789	236
+	miRNA	254926	247939	49
+	snoRNA	2082570	2450550	22
+
+Results are probably biased towards higher density of certain features. I.e. breakpoints
+are most likely to be nearest a satellite feature, but there are more satellite features
+than anything else.
