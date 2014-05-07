@@ -221,7 +221,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			$final_ratios{$results[0]}{real_result} = $results_by_ratio{$result};
 		}
 	} else {
-		foreach my $feature (keys %final_ratios){
+		foreach my $feature (sort keys %final_ratios){
 			my $real_ratio                              = $final_ratios{$feature}{real_result};
 			my $shuffled_results_are_over_real_ratio    = $final_ratios{$feature}{over};
 			my $shuffled_results_are_under_real_ratio   = $final_ratios{$feature}{under};

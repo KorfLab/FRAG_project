@@ -100,6 +100,19 @@ while(my $line = <$in>){
 }
 close($in);
 
+my $coding_bases = 0;
+my $total_bases = 0;
+foreach my $chr (keys %chr_seqs){
+
+	my ($forward) = $chr_seqs{$chr} =~ tr/>/>/;
+	my ($reverse) = $chr_seqs{$chr} =~ tr/</</;
+	$coding_bases += $forward;
+	$coding_bases += $reverse;
+	$total_bases += length($chr_seqs{$chr});
+}
+
+my $percent = sprintf("%.2f", $coding_bases/$total_bases * 100);
+print "$coding_bases coding bp in genome out of $total_bases bp ($percent%)\n";
 
 # now loop over breakpoints
 my %breakpoint_details;
