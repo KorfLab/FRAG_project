@@ -297,14 +297,6 @@ the observed ratio in the real data was exceeded, equalled, or not exceeded.
 	pseudogene	0.2060	931	0	69
 	snoRNA	0.0000	358	642	0
 
-
-Now updating this analysis with more data (90 breakpoints). Note new names of command-line
-options. Two runs with different sizes of breakpoint regions (1 & 10 Kbp):
-
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 1000 > FRAG00062_breakpoints_s1000_L1000.tsv
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose > FRAG00062_breakpoints_s1000_L10000.tsv
-
-
 ### Checking gene orientation ###
 
 At this point we realized that we would like to know whether the enrichment of genes 
@@ -429,3 +421,133 @@ average nearest distances across all breakpoints.
 Results are probably biased towards higher density of certain features. I.e. breakpoints
 are most likely to be nearest a satellite feature, but there are more satellite features
 than anything else.
+
+
+## Updated overlap analysis with new data ##
+
+Now updating earlier analysis with more data (90 breakpoints) and using new GFF file. 
+Note new names of command-line options. Two runs with different sizes of breakpoint regions 
+(1 & 10 Kbp):
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 1000 > FRAG00062_breakpoints_s1000_L1000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose > FRAG00062_breakpoints_s1000_L10000.tsv
+
+Results from region of 1,000 bp:
+
+	Ratio   GFF_feature     Inside_breakpoint_overlap       Outside_breakpoint_overlap
+	1.8220  three_prime_UTR 6888/87307 bp (%7.89)   1310856/30272664 bp (%4.33)
+	1.6351  tRNA    72/87307 bp (%0.08)     15268/30272664 bp (%0.05)
+	1.1862  five_prime_UTR  2895/87307 bp (%3.32)   846232/30272664 bp (%2.80)
+	1.1476  gene    52793/87307 bp (%60.47) 15950976/30272664 bp (%52.69)
+	1.1142  protein 43561/87307 bp (%49.89) 13556218/30272664 bp (%44.78)
+	1.1004  mRNA    55610/87307 bp (%63.69) 17522815/30272664 bp (%57.88)
+	1.0909  exon    39534/87307 bp (%45.28) 12565349/30272664 bp (%41.51)
+	1.0765  CDS     27473/87307 bp (%31.47) 8848861/30272664 bp (%29.23)
+	0.9328  DNA_replication_origin  2845/87307 bp (%3.26)   1057545/30272664 bp (%3.49)
+	0.7439  satellite       4076/87307 bp (%4.67)   1899846/30272664 bp (%6.28)
+	0.6135  transposable_element_gene       3000/87307 bp (%3.44)   1695410/30272664 bp (%5.60)
+	0.5809  transposable_element    8482/87307 bp (%9.72)   5062763/30272664 bp (%16.72)
+	0.5551  transposon_fragment     7899/87307 bp (%9.05)   4934478/30272664 bp (%16.30)
+	0.2096  ncRNA   111/87307 bp (%0.13)    183585/30272664 bp (%0.61)
+	0.0000  pseudogenic_transcript  0/87307 bp (%0.00)      225503/30272664 bp (%0.74)
+	0.0000  pseudogene      0/87307 bp (%0.00)      225503/30272664 bp (%0.74)
+	0.0000  snoRNA  0/87307 bp (%0.00)      2174/30272664 bp (%0.01)
+	0.0000  pseudogenic_exon        0/87307 bp (%0.00)      207487/30272664 bp (%0.69)
+	0.0000  miRNA   0/87307 bp (%0.00)      9336/30272664 bp (%0.03)
+
+And now results after shuffling files 250 times (script still running):
+
+        three_prime_UTR 1.8220  1       0       249
+		gene    1.1476  6       0       244
+        snoRNA  0.0000  17      233     0
+		miRNA   0.0000  23      227     0
+        tRNA    1.6351  35      0       215
+        five_prime_UTR  1.1862  62      0       188
+        ncRNA   0.2096  136     0       114
+		pseudogene      0.0000  183     67      0
+        DNA_replication_origin  0.9328  171     0       79
+    	pseudogenic_exon        0.0000  183     67      0
+        pseudogenic_transcript  0.0000  183     67      0
+        exon    1.0909  39      0       211
+        CDS     1.0765  38      0       212
+        transposable_element_gene       0.6135  219     0       31
+		mRNA    1.1004  18      0       232
+        protein 1.1142  16      0       234
+        satellite       0.7439  242     0       8
+        transposable_element    0.5809  249     0       1
+        transposon_fragment     0.5551  250     0       0
+
+Only 3' UTR and gene features seem to be significant at one end, and transposons at the 
+other end. Results seem more significant when you switch to using a larger region around
+the breakpoint (10 Kbp):
+
+	less FRAG00062_breakpoints_s1000_L1000.tsv | grep '250/100'  | cut -f 2-6 | sort -nk 3
+
+	Ratio   GFF_feature     Inside_breakpoint_overlap       Outside_breakpoint_overlap
+	1.2774  DNA_replication_origin  33668/759948 bp (%4.43) 1026722/29604523 bp (%3.47)
+	1.2578  miRNA   292/759948 bp (%0.04)   9044/29604523 bp (%0.03)
+	1.1566  protein 392120/759948 bp (%51.60)       13207659/29604523 bp (%44.61)
+	1.1495  three_prime_UTR 37770/759948 bp (%4.97) 1279974/29604523 bp (%4.32)
+	1.1447  gene    456841/759948 bp (%60.11)       15546928/29604523 bp (%52.52)
+	1.1276  CDS     249705/759948 bp (%32.86)       8626629/29604523 bp (%29.14)
+	1.0783  mRNA    473476/759948 bp (%62.30)       17104949/29604523 bp (%57.78)
+	1.0341  five_prime_UTR  21958/759948 bp (%2.89) 827169/29604523 bp (%2.79)
+	1.0223  exon    322310/759948 bp (%42.41)       12282573/29604523 bp (%41.49)
+	0.9621  pseudogenic_exon        5001/759948 bp (%0.66)  202486/29604523 bp (%0.68)
+	0.8835  pseudogene      5001/759948 bp (%0.66)  220502/29604523 bp (%0.74)
+	0.8835  pseudogenic_transcript  5001/759948 bp (%0.66)  220502/29604523 bp (%0.74)
+	0.7181  satellite       34461/759948 bp (%4.53) 1869461/29604523 bp (%6.31)
+	0.6098  transposon_fragment     76172/759948 bp (%10.02)        4866205/29604523 bp (%16.44)
+	0.6048  transposable_element    77527/759948 bp (%10.20)        4993718/29604523 bp (%16.87)
+	0.5390  ncRNA   2507/759948 bp (%0.33)  181189/29604523 bp (%0.61)
+	0.4205  transposable_element_gene       18136/759948 bp (%2.39) 1680274/29604523 bp (%5.68)
+	0.1837  tRNA    72/759948 bp (%0.01)    15268/29604523 bp (%0.05)
+	0.0000  snoRNA  0/759948 bp (%0.00)     2174/29604523 bp (%0.01)
+
+The ratios are lower, and many features have different ratios (3' UTR feature drops down 
+the list and DNA replication origin moves up). And after 250 shuffles:
+
+	less FRAG00062_breakpoints_s1000_L10000.tsv | grep '250/100'  | cut -f 2-6 | sort -nk 3
+	gene	1.1447	0	0	250
+	protein	1.1566	0	0	250
+	CDS	1.1276	1	0	249
+	three_prime_UTR	1.1495	3	0	247
+	mRNA	1.0783	9	0	241
+	miRNA	1.2578	35	0	215
+	five_prime_UTR	1.0341	92	0	158
+	pseudogenic_exon	0.9621	93	0	157
+	DNA_replication_origin	1.2774	94	0	156
+	exon	1.0223	95	0	155
+	pseudogene	0.8835	105	0	145
+	pseudogenic_transcript	0.8835	105	0	145
+	snoRNA	0.0000	125	125	0
+	ncRNA	0.5390	180	0	70
+	tRNA	0.1837	225	0	25
+	satellite	0.7181	250	0	0
+	transposable_element	0.6048	250	0	0
+	transposable_element_gene	0.4205	250	0	0
+	transposon_fragment	0.6098	250	0	0
+
+Now we see that gene, protein, CDS, 3' UTR, and mRNA all see significantly enriched in the
+(larger) breakpoint regions. Unclear as to why there is such a difference between 5' and
+3' UTR features, unless breakpoints are more likely to occur nearer to 3' end of genes?
+
+Also want to repeat this analysis but separately on breakpoints that flank either 
+duplicated or triplicated blocks. Need to extract these GFF breakpoint features into 
+separate files (I guess I could make the script do the work):
+
+	grep duplicated FRAG00062.gff   | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > duplicated_blocks.txt
+	grep triplicated FRAG00062.gff  | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > triplicated_blocks.txt
+	grep -f duplicated_blocks.txt FRAG00062.gff > FRAG00062_2x.gff
+	grep -f triplicated_blocks.txt FRAG00062.gff > FRAG00062_3x.gff
+	
+Now re-run overlap script (but maybe with just 1,000 shuffles). Han expects there to be a
+difference with more notable enrichment of genomic features around 3x blocks rather than 2x.
+Will use default breakpoint region size of 10,000 bp:
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_2x_breakpoints_s100_L10000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_3x_breakpoints_s100_L10000.tsv
+
+
+
+

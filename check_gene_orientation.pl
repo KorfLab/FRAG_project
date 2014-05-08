@@ -16,12 +16,13 @@ use Getopt::Long;
 #              Command-line options                  #
 ###################################################### 
 
-my ($breakpoint_gff, $feature_gff, $bp, $help, $verbose) = (undef, undef, 10000, undef, undef);
+my ($breakpoint_gff, $feature_gff, $bp, $help, $verbose, $target_feature) = (undef, undef, 10000, undef, undef, undef);
 
 my $usage = "$0 
 Mandatory arguments:
 --breakpoint_gff <gff file of breakpoint junction coordinates> 
 --feature_gff <master GFF file of all TAIR10 features>
+--feature <name of GFF feature to assess>
 
 Optional arguments:
 --bp <how many bp to extract from inside/outside region (default = $bp)>
@@ -32,16 +33,18 @@ Optional arguments:
 
 GetOptions (
 	"breakpoint_gff=s" => \$breakpoint_gff,
-	"feature_gff=s"  => \$feature_gff,
-	"bp=i"           => \$bp,
-	"help"           => \$help,
-	"verbose"        => \$verbose,
+	"feature_gff=s"    => \$feature_gff,
+	"bp=i"             => \$bp,
+	"help"             => \$help,
+	"target_feature=s" => \$target_feature,
+	"verbose"          => \$verbose,
 );
 
 
 die $usage if ($help);
 die $usage if (not defined $breakpoint_gff);
 die $usage if (not defined $feature_gff);
+die $usage if (not defined $target_feature);
 
 
 ####################################
@@ -79,27 +82,63 @@ initalize_virtual_chromosome_sequences();
 # Main loop over all genes
 ##########################################
 
+# want to know whether we are looking at a stranded feature or not
+# so far, all features apart from replication origins are stranded
+# so set default to be 1
+my $stranded = 1;
+
 open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
 
 while(my $line = <$in>){
 	my ($chr, undef, $feature, $s, $e, undef, $strand, undef, $comment) = split(/\t/, $line);	
 
+	# skip comment lines if present
+	next if ($line =~ m/^#/);
+	
 	# only want protein coding genes
-	next unless ($feature eq 'gene' and $comment =~ m/protein_coding_gene/);
+#	next unless ($feature eq 'gene' and $comment =~ m/protein_coding_gene/);
+	next unless ($feature eq $target_feature);
 
 	# skip plastid chromosomes
 	next if ($chr eq 'ChrM' or $chr eq 'ChrC');	
 
 	# mask where feature occurs in virtual chromosome sequence
+	# type of masking will depend on whether feature is stranded or not
 	my $length = $e - $s + 1;
 	my $replacement_string;
-	$replacement_string = ">" if ($strand eq '+');
-	$replacement_string = "<" if ($strand eq '-');
+	if ($strand eq '+'){
+		$replacement_string = ">";
+	} elsif ($strand eq '-'){
+		$replacement_string = "<";	
+	} elsif ($strand eq '.'){
+		$replacement_string = "o";
+		$stranded = 0;
+	} else {
+		die "Can't find suitable strand character\n";
+	}
+
 	substr($chr_seqs{$chr}, $s, $length) = ($replacement_string x $length);
 	
 }
 close($in);
 
+# some extra details if we are looking at gene features
+if($target_feature eq 'gene'){
+	my $coding_bases = 0;
+	my $total_bases = 0;
+	foreach my $chr (keys %chr_seqs){
+
+		my ($forward) = $chr_seqs{$chr} =~ tr/>/>/;
+		my ($reverse) = $chr_seqs{$chr} =~ tr/</</;
+
+		$coding_bases += $forward;
+		$coding_bases += $reverse;
+		$total_bases += length($chr_seqs{$chr});
+	}
+
+	my $percent = sprintf("%.2f", $coding_bases/$total_bases * 100);
+	print "$coding_bases coding bp in genome out of $total_bases bp ($percent%)\n";
+}
 
 # now loop over breakpoints
 my %breakpoint_details;
@@ -156,6 +195,22 @@ while(my $line = <$in>){
 			$breakpoint_details{'>>>---|---<<<'}++;
 			$junction_status = 1;
 			print "8) $region\n\n" if ($verbose);		
+		} elsif ($stranded == 0 and $region =~ m/ooo \| ooo/){
+			$breakpoint_details{'ooo|ooo'}++;
+			$junction_status = 1;
+			print "9) $region\n\n" if ($verbose);		
+		} elsif ($stranded == 0 and $region =~ m/\-+ \| \-+/){
+			$breakpoint_details{'---|---'}++;
+			$junction_status = 1;
+			print "10) $region\n\n" if ($verbose);		
+		} elsif ($stranded == 0 and $region =~ m/o+ \| \-+/){
+			$breakpoint_details{'ooo|---'}++;
+			$junction_status = 1;
+			print "11) $region\n\n" if ($verbose);		
+		} elsif ($stranded == 0 and $region =~ m/\-+ \| o+/){
+			$breakpoint_details{'---|ooo'}++;
+			$junction_status = 1;
+			print "12) $region\n\n" if ($verbose);	
 		} else{
 			$length *= 2;
 #			print "Increasing length to $length\n$region\n\n";
