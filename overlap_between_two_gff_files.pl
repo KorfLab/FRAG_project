@@ -79,9 +79,15 @@ my $number_of_breakpoints = 0;
 #
 ####################################
 
+print "Run\tReal_ratio\tFeature\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
+print "Feature_bp_inside\t%Inside\t";
+print "Feature_bp_outside\t%Outside\t";
+print "Shuffled_ratio\t";
+print "Above\tSame\tBelow\n";
+
 # will want to store actual ratios from real data in a hash
-# key will be feature, value will be ratio
-my %final_ratios;
+# key will be feature, value will be ratio. Do similar thing for differences
+my %main_results;
 
 # need to do one master run and then a number of shuffles to test significance
 # (as denoted by $shuffles)
@@ -106,15 +112,14 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	# Main loop over each possible feature
 	##########################################
 
-	# track all results by final ratio
-	my %results_by_ratio;
-
+	# track all results by final ratio and by difference
+	my %tmp_results;
 	# not the quickest way to do this, but ensures we don't run out of memory
 
-	my @features = qw(CDS DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
+	my @gff_features = qw(CDS DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
 
-	foreach my $desired_gff_feature (@features){
-		warn "\tProcessing $desired_gff_feature data\n" if ($verbose);
+	foreach my $gff_feature (@gff_features){
+		warn "\tProcessing $gff_feature data\n" if ($verbose);
 		
 		# create copies of virtual chromosome sequences
 		my %tmp_chr_seqs = %chr_seqs;
@@ -128,7 +133,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			my ($chr, undef, $feature, $s, $e, undef, undef, undef, undef) = split(/\t/, $line);	
 
 			# only want to look at one feature at a time
-			next unless $feature eq $desired_gff_feature;
+			next unless $feature eq $gff_feature;
 	
 			# temporarily skip if not chr1 or chr4?
 			next unless (($chr eq 'Chr1') or ($chr eq 'Chr4'));
@@ -152,8 +157,6 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	
 		# now compare patterns in original virtual sequence (just breakpoints)
 		# and tmp virtual sequence (masked with feature)
-		my $output_text = "$desired_gff_feature\t";
-
 		my $original_breakpoint_bp      = $chr_seqs{'Chr1'} =~ tr/B/B/;
 		$original_breakpoint_bp        += $chr_seqs{'Chr4'} =~ tr/B/B/;
 
@@ -165,8 +168,6 @@ for (my $i = 0; $i <= $shuffles; $i++){
 
 		my $remaining_non_breakpoint_bp = $tmp_chr_seqs{'Chr1'} =~ tr/-/-/;
 		$remaining_non_breakpoint_bp   += $tmp_chr_seqs{'Chr4'} =~ tr/-/-/;
-
-#		print "$desired_gff_feature\t$original_breakpoint_bp\t$original_non_breakpoint_bp\t$remaining_breakpoint_bp\t$remaining_non_breakpoint_bp\n";
 	
 		my $feature_overlapping_breakpoint_regions     = $original_breakpoint_bp - $remaining_breakpoint_bp;
 		my $feature_overlapping_non_breakpoint_regions = $original_non_breakpoint_bp - $remaining_non_breakpoint_bp;
@@ -186,65 +187,59 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			$percent_overlapping_non_breakpoint_regions = ($feature_overlapping_non_breakpoint_regions / $original_non_breakpoint_bp) * 100;
 		}
 	
-		my $ratio = sprintf("%.4f", $percent_overlapping_breakpoint_regions / $percent_overlapping_non_breakpoint_regions);
+		my $tmp_ratio = sprintf("%.4f", $percent_overlapping_breakpoint_regions / $percent_overlapping_non_breakpoint_regions);
 		$percent_overlapping_breakpoint_regions     = sprintf("%.2f", $percent_overlapping_breakpoint_regions);
 		$percent_overlapping_non_breakpoint_regions = sprintf("%.2f", $percent_overlapping_non_breakpoint_regions);
 		
-		$output_text .= "$feature_overlapping_breakpoint_regions/$original_breakpoint_bp bp (%$percent_overlapping_breakpoint_regions)\t";
-		$output_text .= "$feature_overlapping_non_breakpoint_regions/$original_non_breakpoint_bp bp (%$percent_overlapping_non_breakpoint_regions)";
+		# store all of the current results in tmp hash
+		$tmp_results{$gff_feature}{total_breakpoint_bp}       = $original_breakpoint_bp;
+		$tmp_results{$gff_feature}{total_non_breakpoint_bp}   = $original_non_breakpoint_bp;
+		$tmp_results{$gff_feature}{feature_breakpoint_bp}     = $feature_overlapping_breakpoint_regions;
+		$tmp_results{$gff_feature}{feature_non_breakpoint_bp} = $feature_overlapping_non_breakpoint_regions;
+		$tmp_results{$gff_feature}{feature_breakpoint_pc}     = $percent_overlapping_breakpoint_regions;
+		$tmp_results{$gff_feature}{feature_non_breakpoint_pc} = $percent_overlapping_non_breakpoint_regions;
+		$tmp_results{$gff_feature}{ratio}                     = $tmp_ratio;
 
-		$results_by_ratio{$output_text} = $ratio;
-
-		# if we are shuffling, want to count whether this ratio beats real ratio in unshuffled data
-		next unless ($i > 0);
+		# do a couple of things differently now based on whether this is the
+		# first run (main results) or a shuffled result
+				
+		if ($i == 0){
+			$main_results{$gff_feature}{ratio_over}  = 0;
+			$main_results{$gff_feature}{ratio_under} = 0;
+			$main_results{$gff_feature}{ratio_same}  = 0;
 		
-		if($ratio > $final_ratios{$desired_gff_feature}{real_result}){
-			$final_ratios{$desired_gff_feature}{over}++;
-#			print "Shuffle $i) OVER REAL RATIO: $ratio $output_text\n" if ($verbose);
-		} elsif($ratio < $final_ratios{$desired_gff_feature}{real_result}){
-			$final_ratios{$desired_gff_feature}{under}++;
-#			print "Shuffle $i) UNDER REAL RATIO: $ratio $output_text\n" if ($verbose);		
-		} else{
-			$final_ratios{$desired_gff_feature}{same}++;
-#			print "Shuffle $i) SAME AS REAL RATIO: $ratio $output_text\n" if ($verbose);				
-		}
-	}
-
-	# this part only happens in main run with real (unshuffled) data
-	if ($i == 0){
-		print "Ratio\tGFF_feature\tInside_breakpoint_overlap\tOutside_breakpoint_overlap\n";
-		foreach my $result (sort {$results_by_ratio{$b} <=> $results_by_ratio{$a}} keys %results_by_ratio){
-			print "$results_by_ratio{$result}\t$result\n";
-
-			# want to store result of final ratio in a hash to see if it is beaten in shuffling
-			my @results = split(/\t/, $result);
-			$final_ratios{$results[0]}{real_result} = $results_by_ratio{$result};
-		}
-	} else {
-		foreach my $feature (sort keys %final_ratios){
-			my $real_ratio                              = $final_ratios{$feature}{real_result};
-			my $shuffled_results_are_over_real_ratio    = $final_ratios{$feature}{over};
-			my $shuffled_results_are_under_real_ratio   = $final_ratios{$feature}{under};
-			my $shuffled_results_are_same_as_real_ratio = $final_ratios{$feature}{same};
-
-			$shuffled_results_are_over_real_ratio    = 0 if (not defined $shuffled_results_are_over_real_ratio);
-			$shuffled_results_are_under_real_ratio   = 0 if (not defined $shuffled_results_are_under_real_ratio);
-			$shuffled_results_are_same_as_real_ratio = 0 if (not defined $shuffled_results_are_same_as_real_ratio);
-
-			if($verbose and $i < $shuffles){
-				print "Shuffle $i/$shuffles\t$feature\t$real_ratio\t";
-				print "$shuffled_results_are_over_real_ratio\t";
-				print "$shuffled_results_are_same_as_real_ratio\t";
-				print "$shuffled_results_are_under_real_ratio\n";
-			} elsif ($i == $shuffles) {
-				print "Shuffle $i/$shuffles\t$feature\t$real_ratio\t";
-				print "$shuffled_results_are_over_real_ratio\t";
-				print "$shuffled_results_are_same_as_real_ratio\t";
-				print "$shuffled_results_are_under_real_ratio\n";			
+			$main_results{$gff_feature}{ratio} = $tmp_ratio;
+		} else{		
+			# if we are shuffling (i.e. $i > 0), we want to count whether the current ratio 
+			# (from shuffling) beats real ratio in unshuffled data
+			if($tmp_ratio > $main_results{$gff_feature}{ratio}){
+				$main_results{$gff_feature}{ratio_over}++;
+			} elsif($tmp_ratio < $main_results{$gff_feature}{ratio}){
+				$main_results{$gff_feature}{ratio_under}++;
+			} else{
+				$main_results{$gff_feature}{ratio_same}++;
 			}
-
 		}
+
+
+		print "$i\t";
+		print "$main_results{$gff_feature}{ratio}\t";
+		print "$gff_feature\t";
+		print "$original_breakpoint_bp\t";
+		print "$original_non_breakpoint_bp\t";
+		print "$feature_overlapping_breakpoint_regions\t";
+		print "$percent_overlapping_breakpoint_regions\t";
+		print "$feature_overlapping_non_breakpoint_regions\t";
+		print "$percent_overlapping_non_breakpoint_regions\t";
+		print "$tmp_ratio\t";
+		print "$main_results{$gff_feature}{ratio_over}\t";
+		print "$main_results{$gff_feature}{ratio_same}\t";
+		print "$main_results{$gff_feature}{ratio_under}\n";
+
+
 	}
+	
+	
 }
 
 
