@@ -128,6 +128,9 @@ effectively random (as expected):
 
 Running this script with newer breakpoint data for FRAG00062 (now with 90 breakpoints):
 
+	./check_gene_orientation.pl --breakpoint_gff FRAG00062.gff --feature_gff genes.gff --target gene
+
+	60130895 coding bp in genome out of 119146348 bp (50.47%)
 	>>>|>>>	25	%27.78
 	<<<|<<<	31	%34.44
 	>>>---|---<<<	4	%4.44
@@ -142,6 +145,7 @@ And for FRAG00045 (30 breakpoints):
 
 	./check_gene_orientation.pl --breakpoint_gff FRAG00045.gff --feature_gff genes.gff --target gene
 
+	60130895 coding bp in genome out of 119146348 bp (50.47%)
 	>>>|>>>	12	%40.00
 	<<<|<<<	5	%16.67
 	>>>---|---<<<	3	%10.00
