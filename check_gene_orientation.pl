@@ -22,7 +22,7 @@ my $usage = "$0
 Mandatory arguments:
 --breakpoint_gff <gff file of breakpoint junction coordinates> 
 --feature_gff <master GFF file of all TAIR10 features>
---feature <name of GFF feature to assess>
+--target_feature <name of GFF feature to assess>
 
 Optional arguments:
 --bp <how many bp to extract from inside/outside region (default = $bp)>

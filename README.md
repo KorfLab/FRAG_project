@@ -1,8 +1,8 @@
 FRAG_project
 ============
 
-To contain code and data files for the Fragmentation project, investigating 
-shattered chromosome phenotypes in _Arabidopsis thaliana_.
+To contain code and data files for the Fragmentation project, investigating shattered 
+chromosome phenotypes in _Arabidopsis thaliana_.
 	
 	
 ## Background ## 
@@ -21,178 +21,7 @@ triplications. Actual values are slightly lower than this.
 
 
 
-## Approach 1: Peak finder ##
-
-Each row in the above TSV file corresponds to a 1 Kbp bin. Want to take all windows of 
-different sized bins and perform t-tests to compare average copy number inside the bin 
-with either:
-
-a) all bins outside that window 
-b) some maximum sized window either side of the target window.
-
-Rather than treat the whole chromosome as one thing, we can instead split it into 
-overlapping 'chunks' and pretty much treat each chunk as its own chromosome. Chunks should 
-be big enough to contain ends of large 2x/3x blocks, or the entirety of a small duplicated 
-block. For any chunk, we can take a target window in that chunk (minimum size of 2 data 
-points) and run a a t-test in one of two ways:
-
-1. Calculate mean1 from target window and mean2 from every data point outside target window 
-(still within same chunk)
-2. Calculate mean1 from target window and mean2 from all data points inside chunk
-
-When window sizes are small and chunk sizes are large, method 2 is much quicker and 
-produces a mean read count for the entire chunk (mean2) that is not very different from 
-the mean of all data points outside the target window (mean1). As the window size gets 
-larger though, the use of this 'chunk mean' gets a little more misleading.
-
-Method 1 is slower but produces higher t-test values. Can compare results from both 
-methods as follows: 
-
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 200 --mean_mode 1 > run_200_mode1.tsv
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 200 --mean_mode 2 > run_200_mode2.tsv
-	
---mean_mode 1 = method 1 above, --mean_mode 2 = method 2.
-
-These runs use a chunk size of 200 (data points) which equals 200 Kbp. This means the max 
-window size will be 100 Kbp.
-
-
-
-## Find maximum possible t-values by shuffling real data##
-
-With so many t-tests, there will be significant results by chance, so we can first find 
-out what is the maximum t-test score we would see if we shuffled the order of the bins n 
-times. When doing this we record the maximum t-test value for windows of different sizes, 
-within each chunk, within each chromosome. E.g. 
-
-	Chr1:0-199:10   2.83146179714909 
-
-This says that the largest t-test value from a window of 10 data points (in chunk 0-199 on 
-chromosome 1) is 2.81. Ideally want to do 100 or more shufflings for any given chunk size.
-
-This test makes 100 shuffles using window sizes at 2-100 (chunk size 200). The script 
-updates the output file (CGRs_1kb_plots_forkeith.tsv.shuffled.2-100.100) after each 
-shuffling so you can start using it for testing. 
-
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 200 --mean_mode 1 --shuffle 100
-
-
-## Final testing using shuffled data ##
-
-Using above shuffled file, we can now look for significant t-test results in the real data 
-but use the shuffled results as a control. We still want to use a minimum t-test score for 
-standard significance (but we can potentially go higher than what is statistically 
-significant at P < 0.01 just to be safe). The default 'min_t' value in the script is 5.
-
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 200 --mean_mode 1 --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.2-100.100 > run_200s3_mode_1.tsv
- 
-'s3' in the output file name refers to the fact that at runtime, the shuffled output file 
-had undergone 3 shufflings.
-
-
-## Results part 1: shuffling ##
-
-At different chunk sizes (100, 200, 300, 500, and 1000) I have produced background shuffle 
-results from 100 (or sometimes 1000) shufflings:
-
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 100 --mean_mode 1 --shuffle 100 
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 200 --mean_mode 1 --shuffle 100 
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 200 --mean_mode 1 --shuffle 1000
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 300 --mean_mode 1 --shuffle 100 
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 500 --mean_mode 1 --shuffle 100 
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 1000 --mean_mode 1 --shuffle 100 
-
-This produces the following output files:
-
-	CGRs_1kb_plots_forkeith.tsv.shuffled.1000.100
-	CGRs_1kb_plots_forkeith.tsv.shuffled.100.100
-	CGRs_1kb_plots_forkeith.tsv.shuffled.200.100
-	CGRs_1kb_plots_forkeith.tsv.shuffled.200.1000
-	CGRs_1kb_plots_forkeith.tsv.shuffled.300.100
-	CGRs_1kb_plots_forkeith.tsv.shuffled.500.100
-	
-The	difference between 100 and 1000 shufflings means that higher t-values can be produced, 
-which will ultimately reduce the number of 2x and 3x blocks that are called.
-
-
-## Results part 2: final block calling ##
-
-Can always do this 3 ways, using no background file (unshuffled = u), or using background 
-file (shuffled = s) with either combination of --mean_mode 1 or 2. E.g. 
-
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 100 --mean_mode 1  --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.100.100 > run_100s100_mode1.tsv
-	./peak_finder.pl -file CGRs_1kb_plots_forkeith.tsv --chunk_size 100 --mean_mode 2  --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.100.100 > run_100s100_mode2.tsv
-
-Final output files look like this:
-
-	Chr     Chunk   Win:start-end   Win_size        Type    Copy_number     Start_coord     End_coord       t       Mean1   Mean2
-	Chr1    0-99    33-82   50      fakeblock       3x      33000   82000   15.06   3.38    2.63
-	Chr1    0-99    0-31    32      edge-R  2x      0       31000   9.93    2.54    3.23
-	Chr1    50-149  50-87   38      edge-R  3x      50000   87000   19.46   3.35    2.51
-	Chr1    50-149  98-147  50      fakeblock       2x      98000   147000  9.93    2.50    3.15
-	Chr1    100-199 142-145 4       block   2x      142000  145000  6.90    2.00    2.53
-	Chr1    150-249 206-249 44      edge-L  1x      206000  249000  32.34   1.71    2.52
-	Chr1    150-249 155-204 50      fakeblock       2x      155000  204000  17.05   2.53    1.80
-	Chr1    200-299 200-205 6       edge-R  2x      200000  205000  18.52   2.55    1.69
-	Chr1    400-499 459-499 41      edge-L  3x      459000  499000  45.35   3.38    1.71
-	Chr1    400-499 408-457 50      fakeblock       1x      408000  457000  14.68   1.69    3.09
-	Chr1    450-549 450-458 9       edge-R  1x      450000  458000  18.74   1.76    3.34
-	Chr1    450-549 450-463 14      edge-R  2x      450000  463000  8.53    2.37    3.33
-	Chr1    500-599 572-599 28      edge-L  2x      572000  599000  15.14   2.53    3.37
-	Chr1    500-599 522-571 50      fakeblock       3x      522000  571000  7.74    3.41    2.86
-	Chr1    550-649 550-571 22      edge-R  3x      550000  571000  19.38   3.48    2.55
-	
-'Fakeblocks' are where a potential block has a size which is the maximum window size 
-(half the chunk size by default). So this block may have a significantly higher copy 
-number, and may lie in the middle of a chunk, but it could possibly be extended even 
-further in 5' and/or 3' directions. Hits one edge of the current chunk, so we don't know 
-if this block should really be extended
-
-Tried creating new command-line options to:
-
-1. control the maximum level of variance within a window (default = 0.04). This is to 
-stop calling a block which mostly spans a 2x region (for instance) but overlaps into a 
-1x or 3x region by a small amount. 
-2. control the minimum difference in means (within window vs outside window). Default = 0.6
-
-Will now include this info in file names:
-
-	./peak_finder2.pl --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.100.100 --file CGRs_1kb_plots_forkeith.tsv --chunk_size 100 --mean_mode 1  > run_c100s100m1v0.04d0.6.tsv 2>errors	
-	
----
-
-## Approach 2: quicker and bigger ##
-
-The above approach takes too long to run exhaustively across many different chunk/window
-sizes. Tried new approach to simply look for the breaks at a block boundary rather than
-finding the entire block.
-
-
-	breakpoint_finder.pl --shuffle_file CGRs_1kb_plots_forkeith.tsv.shuffled.1000.100 --file CGRs_1kb_plots_forkeith.tsv --win_size 20 > test20.tsv 2>errors20 &
-
-
-
-## Overlap analysis ##
-
-Want to compare the locations of our junctions with all known genomic features from TAIRs
-GFF files. 
-
->*Null hypothesis* - Regions surrounding breakpoints are not enriched for any particular
-genomic feature compared to non-breakpoint regions
-
-### Plan of action ###
-
-1. Take a list of current junction coordinates (2 for each breakpoint) in GFF format
-2. Assemble a master GFF feature file for A. thaliana
-3. For each feature in file 2, compare junctions in file 1 to determine:
-	1. Are there more features (per Kbp) inside junctions than outside junctions?
-	2. May need to shuffle chromosomes to assess significance
-
-Will need to choose threshold for what constitutes a 'junction region'. Will start by 
-using 10 Kbp around junction coordinate (5 Kbp each side).
-
-
-### Making Master GFF file ###
+### Making Master GFF file of all genomic features ###
 
 TAIR has separate GFF files for various features on their FTP (not all in one master file).
 So:
@@ -228,119 +57,7 @@ How many unique features do we have?
 Can reorder master GFF file to sort by chromosome and then coordinate:
 
 	(sort -k1,1 -k4n,4n all_TAIR10_features.gff  > tmp) && mv tmp all_TAIR10_features.gff
-	
-	
-### Running analysis ### 	
 
-Certain GFF features (chromosome, rRNA, snRNA) are ignored from analysis.
-
-If running in default mode it will just calculate ratios of bp-of-GFF-feature that overlaps
-junction region vs bp-of-GFF-feature that occur outside junction region.
-
-	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff
-	
-The result will look something like this:
-
-	Ratio	GFF_feature	Inside_junction_overlap	Outside_junction_overlap
-	1.45	DNA_replication_origin	32483/648271 bp (%5.01)	1027907/29711200 bp (%3.46)
-	1.20	three_prime_UTR	33578/648271 bp (%5.18)	1284166/29711200 bp (%4.32)
-	1.20	protein	347914/648271 bp (%53.67)	13251865/29711200 bp (%44.60)
-	1.19	gene	405999/648271 bp (%62.63)	15597770/29711200 bp (%52.50)
-	1.18	CDS	222609/648271 bp (%34.34)	8653725/29711200 bp (%29.13)
-	1.13	mRNA	421893/648271 bp (%65.08)	17156532/29711200 bp (%57.74)
-	1.07	exon	287654/648271 bp (%44.37)	12317229/29711200 bp (%41.46)
-	1.04	miRNA	207/648271 bp (%0.03)	9129/29711200 bp (%0.03)
-	0.99	five_prime_UTR	18016/648271 bp (%2.78)	831111/29711200 bp (%2.80)
-	0.68	satellite	27885/648271 bp (%4.30)	1876037/29711200 bp (%6.31)
-	0.63	ncRNA	2507/648271 bp (%0.39)	181189/29711200 bp (%0.61)
-	0.55	transposon_fragment	59012/648271 bp (%9.10)	4883365/29711200 bp (%16.44)
-	0.55	transposable_element	60168/648271 bp (%9.28)	5011077/29711200 bp (%16.87)
-	0.47	transposable_element_gene	17310/648271 bp (%2.67)	1681100/29711200 bp (%5.66)
-	0.22	tRNA	72/648271 bp (%0.01)	15268/29711200 bp (%0.05)
-	0.22	pseudogenic_exon	1009/648271 bp (%0.16)	206478/29711200 bp (%0.69)
-	0.21	pseudogene	1009/648271 bp (%0.16)	224494/29711200 bp (%0.76)
-	0.21	pseudogenic_transcript	1009/648271 bp (%0.16)	224494/29711200 bp (%0.76)
-	0.00	snoRNA	0/648271 bp (%0.00)	2174/29711200 bp (%0.01)
-
-This suggests that DNA replication origins are 1.45 x more likely to occur inside junction
-regions that outside junction regions (in FRAG00062). Other GFF features are also over/under
-represented in junction regions.
-
-Now to include shuffling to see whether we see similar ratios when we randomize the location
-of all of the breakpoints (for the tailswap region we allow the possibility of all junctions 
-occurring in Chr1, or Chr4, or any combination of both).
-
-	overlap_between_two_gff_files.pl --junction_gff junctions_FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_junction_output.tsv
-
-Shuffling results suggest that enrichment of gene features in junction regions is 
-significant, but enrichment of DNA replication origins is not. For each feature, the 
-table below shows how many times (out of a 1000 shuffles of the junction coordinates),
-the observed ratio in the real data was exceeded, equalled, or not exceeded.
-
-	DNA_replication_origin	1.4483	289	0	711
-	protein	1.2033	0	0	1000
-	three_prime_UTR	1.1984	26	1	973
-	gene	1.1930	0	0	1000
-	CDS	1.1790	0	0	1000
-	mRNA	1.1270	7	0	993
-	exon	1.0703	120	1	879
-	miRNA	1.0392	226	1	773
-	five_prime_UTR	0.9935	529	1	470
-	satellite	0.6812	998	0	2
-	ncRNA	0.6341	666	0	334
-	transposon_fragment	0.5538	1000	0	0
-	transposable_element	0.5503	1000	0	0
-	transposable_element_gene	0.4719	996	0	4
-	pseudogenic_exon	0.2240	924	0	76
-	tRNA	0.2161	819	0	181
-	pseudogenic_transcript	0.2060	931	0	69
-	pseudogene	0.2060	931	0	69
-	snoRNA	0.0000	358	642	0
-
-### Checking gene orientation ###
-
-At this point we realized that we would like to know whether the enrichment of genes 
-inside junction regions followed any pattern. I.e. are there more likely to be convergently
-transcribed genes (hence more 3' UTRs) than divergently or tandemly transcribed genes.
-
-I put only gene features from all_TAIR10_feature.gff into a new file (genes.gff) and made
-a new script to test this:
-
-	./check_gene_orientation.pl --junction_gff junctions_FRAG00062.gff --feature_gff genes.gff
-	
-This revealed that across the entire genome, (protein-coding) gene orientation is 
-effectively random (as expected):
-
-	>>      6987    %25.82
-	<>      6508    %24.05
-	<<      7058    %26.08
-	><      6508    %24.05
-	
-I then looked at genes inside junction regions. The breakpoint itself can either be in a 
-gene or between genes:
-
-	>>>|>>> 18      %24.32
-	<<<|<<< 26      %35.14	
-	>>>---|--->>>   6       %8.11
-	<<<---|---<<<   9       %12.16
-	>>>---|---<<<   4       %5.41
-	<<<---|--->>>   11      %14.86
-	
-So 44 out of 74 breakpoints (59%) are inside genes. The remaining 30 show a slight increase
-towards being between divergently transcribed genes (37% (11/30) of all intergenic 
-breakpoints), but can't do much with small data size.
-
-Re-ran this script with newer breakpoint data for FRAG00062 (now with 90 breakpoints):
-
-	>>>|>>>	25	%27.78
-	<<<|<<<	31	%34.44
-	>>>---|---<<<	4	%4.44
-	<<<---|---<<<	8	%8.89
-	<<<---|--->>>	14	%15.56
-	>>>---|--->>>	8	%8.89
-
-Breakpoints inside genes now up to 62% of all breakpoints (56/90) and those that are inside
-divergently transcribed genes now up to 41% (14/34).
 
 
 ### New nomenclature and data formats needed ###
@@ -388,6 +105,56 @@ store the sequence that occurs in junction regions.
 	Chr1	PRICE	chromosome_breakpoint	31632	31632	.	-	.	ID=breakpoint0003;Parent=block0002;Name=01b1;Note="paired with breakpoint0087"
 
 
+
+
+### Checking gene orientation ###
+
+At this point we realized that we would like to know whether the enrichment of genes 
+inside junction regions followed any pattern. I.e. are there more likely to be convergently
+transcribed genes (hence more 3' UTRs) than divergently or tandemly transcribed genes.
+
+I put only gene features from all_TAIR10_feature.gff into a new file (genes.gff) and made
+a new script to test this:
+
+	./check_gene_orientation.pl --breakpoint_gff FRAG00062.gff --feature_gff genes.gff --target gene
+	
+This revealed that across the entire genome, (protein-coding) gene orientation is 
+effectively random (as expected):
+
+	>>      6987    %25.82
+	<>      6508    %24.05
+	<<      7058    %26.08
+	><      6508    %24.05
+
+Running this script with newer breakpoint data for FRAG00062 (now with 90 breakpoints):
+
+	>>>|>>>	25	%27.78
+	<<<|<<<	31	%34.44
+	>>>---|---<<<	4	%4.44
+	<<<---|---<<<	8	%8.89
+	<<<---|--->>>	14	%15.56
+	>>>---|--->>>	8	%8.89
+
+Breakpoints inside genes account for 62% of all breakpoints (56/90) and those that are inside
+divergently transcribed genes account for 41% of all intergenic breakpoints (14/34).
+
+And for FRAG00045 (30 breakpoints):
+
+	./check_gene_orientation.pl --breakpoint_gff FRAG00045.gff --feature_gff genes.gff --target gene
+
+	>>>|>>>	12	%40.00
+	<<<|<<<	5	%16.67
+	>>>---|---<<<	3	%10.00
+	<<<---|---<<<	3	%10.00
+	>>>---|--->>>	5	%16.67
+	<<<---|--->>>	2	%6.67
+
+This time only 57% of breakpoints were inside genes (17/30) and only 15% of intergenic 
+breakpoints are between divergently transcribed genes. So no strong pattern.
+
+
+
+
 ## Data on nearest feature to each breakpoint ##
 
 Using new GFF file, I wrote a script to calculate the average distance of any genomic feature
@@ -423,131 +190,422 @@ are most likely to be nearest a satellite feature, but there are more satellite 
 than anything else.
 
 
-## Updated overlap analysis with new data ##
 
-Now updating earlier analysis with more data (90 breakpoints) and using new GFF file. 
-Note new names of command-line options. Two runs with different sizes of breakpoint regions 
-(1 & 10 Kbp):
 
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 1000 > FRAG00062_breakpoints_s1000_L1000.tsv
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose > FRAG00062_breakpoints_s1000_L10000.tsv
+## Analysis of enriched features in breakpoint regions ##
 
-Results from region of 1,000 bp:
+If we define a 'breakpoint region' as a window of sequence around each breakpoint location
+(mapped to the reference genome), we can ask whether any genomic features are enriched
+in these breakpoint regions. E.g. take 1,000 bp around all breakpoints (potentially
+overlapping other breakpoints) and ask whether the total bp of a feature such as 'coding
+exons' is higher (as a percentage) *inside* those regions vs all DNA *outside* those
+regions.
 
-	Ratio   GFF_feature     Inside_breakpoint_overlap       Outside_breakpoint_overlap
-	1.8220  three_prime_UTR 6888/87307 bp (%7.89)   1310856/30272664 bp (%4.33)
-	1.6351  tRNA    72/87307 bp (%0.08)     15268/30272664 bp (%0.05)
-	1.1862  five_prime_UTR  2895/87307 bp (%3.32)   846232/30272664 bp (%2.80)
-	1.1476  gene    52793/87307 bp (%60.47) 15950976/30272664 bp (%52.69)
-	1.1142  protein 43561/87307 bp (%49.89) 13556218/30272664 bp (%44.78)
-	1.1004  mRNA    55610/87307 bp (%63.69) 17522815/30272664 bp (%57.88)
-	1.0909  exon    39534/87307 bp (%45.28) 12565349/30272664 bp (%41.51)
-	1.0765  CDS     27473/87307 bp (%31.47) 8848861/30272664 bp (%29.23)
-	0.9328  DNA_replication_origin  2845/87307 bp (%3.26)   1057545/30272664 bp (%3.49)
-	0.7439  satellite       4076/87307 bp (%4.67)   1899846/30272664 bp (%6.28)
-	0.6135  transposable_element_gene       3000/87307 bp (%3.44)   1695410/30272664 bp (%5.60)
-	0.5809  transposable_element    8482/87307 bp (%9.72)   5062763/30272664 bp (%16.72)
-	0.5551  transposon_fragment     7899/87307 bp (%9.05)   4934478/30272664 bp (%16.30)
-	0.2096  ncRNA   111/87307 bp (%0.13)    183585/30272664 bp (%0.61)
-	0.0000  pseudogenic_transcript  0/87307 bp (%0.00)      225503/30272664 bp (%0.74)
-	0.0000  pseudogene      0/87307 bp (%0.00)      225503/30272664 bp (%0.74)
-	0.0000  snoRNA  0/87307 bp (%0.00)      2174/30272664 bp (%0.01)
-	0.0000  pseudogenic_exon        0/87307 bp (%0.00)      207487/30272664 bp (%0.69)
-	0.0000  miRNA   0/87307 bp (%0.00)      9336/30272664 bp (%0.03)
+Can try this for many different sizes of breakpoint (100 bp up to 50 Kbp). In this analysis
+certain GFF features (chromosome, rRNA, snRNA) are ignored.
 
-And now results after shuffling files 250 times (script still running):
+The final result is calculated as a ratio of %breakpoint-region-occupied-by-feature compared
+to %non-breakpoint-region-occupied-by-feature. To assess the significance of these ratios,
+I perform shuffling experiments to see whether we see similar ratios when we randomize the 
+location of all of the breakpoints (for the tailswap region we allow the possibility of 
+all junctions  occurring in Chr1, or Chr4, or any combination of both).
 
-        three_prime_UTR 1.8220  1       0       249
-		gene    1.1476  6       0       244
-        snoRNA  0.0000  17      233     0
-		miRNA   0.0000  23      227     0
-        tRNA    1.6351  35      0       215
-        five_prime_UTR  1.1862  62      0       188
-        ncRNA   0.2096  136     0       114
-		pseudogene      0.0000  183     67      0
-        DNA_replication_origin  0.9328  171     0       79
-    	pseudogenic_exon        0.0000  183     67      0
-        pseudogenic_transcript  0.0000  183     67      0
-        exon    1.0909  39      0       211
-        CDS     1.0765  38      0       212
-        transposable_element_gene       0.6135  219     0       31
-		mRNA    1.1004  18      0       232
-        protein 1.1142  16      0       234
-        satellite       0.7439  242     0       8
-        transposable_element    0.5809  249     0       1
-        transposon_fragment     0.5551  250     0       0
 
-Only 3' UTR and gene features seem to be significant at one end, and transposons at the 
-other end. Results seem more significant when you switch to using a larger region around
-the breakpoint (10 Kbp):
+#### FRAG00062 ####
 
-	less FRAG00062_breakpoints_s1000_L1000.tsv | grep '250/100'  | cut -f 2-6 | sort -nk 3
-
-	Ratio   GFF_feature     Inside_breakpoint_overlap       Outside_breakpoint_overlap
-	1.2774  DNA_replication_origin  33668/759948 bp (%4.43) 1026722/29604523 bp (%3.47)
-	1.2578  miRNA   292/759948 bp (%0.04)   9044/29604523 bp (%0.03)
-	1.1566  protein 392120/759948 bp (%51.60)       13207659/29604523 bp (%44.61)
-	1.1495  three_prime_UTR 37770/759948 bp (%4.97) 1279974/29604523 bp (%4.32)
-	1.1447  gene    456841/759948 bp (%60.11)       15546928/29604523 bp (%52.52)
-	1.1276  CDS     249705/759948 bp (%32.86)       8626629/29604523 bp (%29.14)
-	1.0783  mRNA    473476/759948 bp (%62.30)       17104949/29604523 bp (%57.78)
-	1.0341  five_prime_UTR  21958/759948 bp (%2.89) 827169/29604523 bp (%2.79)
-	1.0223  exon    322310/759948 bp (%42.41)       12282573/29604523 bp (%41.49)
-	0.9621  pseudogenic_exon        5001/759948 bp (%0.66)  202486/29604523 bp (%0.68)
-	0.8835  pseudogene      5001/759948 bp (%0.66)  220502/29604523 bp (%0.74)
-	0.8835  pseudogenic_transcript  5001/759948 bp (%0.66)  220502/29604523 bp (%0.74)
-	0.7181  satellite       34461/759948 bp (%4.53) 1869461/29604523 bp (%6.31)
-	0.6098  transposon_fragment     76172/759948 bp (%10.02)        4866205/29604523 bp (%16.44)
-	0.6048  transposable_element    77527/759948 bp (%10.20)        4993718/29604523 bp (%16.87)
-	0.5390  ncRNA   2507/759948 bp (%0.33)  181189/29604523 bp (%0.61)
-	0.4205  transposable_element_gene       18136/759948 bp (%2.39) 1680274/29604523 bp (%5.68)
-	0.1837  tRNA    72/759948 bp (%0.01)    15268/29604523 bp (%0.05)
-	0.0000  snoRNA  0/759948 bp (%0.00)     2174/29604523 bp (%0.01)
-
-The ratios are lower, and many features have different ratios (3' UTR feature drops down 
-the list and DNA replication origin moves up). And after 250 shuffles:
-
-	less FRAG00062_breakpoints_s1000_L10000.tsv | grep '250/100'  | cut -f 2-6 | sort -nk 3
-	gene	1.1447	0	0	250
-	protein	1.1566	0	0	250
-	CDS	1.1276	1	0	249
-	three_prime_UTR	1.1495	3	0	247
-	mRNA	1.0783	9	0	241
-	miRNA	1.2578	35	0	215
-	five_prime_UTR	1.0341	92	0	158
-	pseudogenic_exon	0.9621	93	0	157
-	DNA_replication_origin	1.2774	94	0	156
-	exon	1.0223	95	0	155
-	pseudogene	0.8835	105	0	145
-	pseudogenic_transcript	0.8835	105	0	145
-	snoRNA	0.0000	125	125	0
-	ncRNA	0.5390	180	0	70
-	tRNA	0.1837	225	0	25
-	satellite	0.7181	250	0	0
-	transposable_element	0.6048	250	0	0
-	transposable_element_gene	0.4205	250	0	0
-	transposon_fragment	0.6098	250	0	0
-
-Now we see that gene, protein, CDS, 3' UTR, and mRNA all see significantly enriched in the
-(larger) breakpoint regions. Unclear as to why there is such a difference between 5' and
-3' UTR features, unless breakpoints are more likely to occur nearer to 3' end of genes?
-
-Also want to repeat this analysis but separately on breakpoints that flank either 
-duplicated or triplicated blocks. Need to extract these GFF breakpoint features into 
-separate files (I guess I could make the script do the work):
+For this dataset we can also separate out the breakpoint data into two subsets,
+those breakpoints that flank either 2x or 3x blocks:
 
 	grep duplicated FRAG00062.gff   | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > duplicated_blocks.txt
 	grep triplicated FRAG00062.gff  | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > triplicated_blocks.txt
 	grep -f duplicated_blocks.txt FRAG00062.gff > FRAG00062_2x.gff
 	grep -f triplicated_blocks.txt FRAG00062.gff > FRAG00062_3x.gff
+
+This means that each 'run' of  analysis for any given size of breakpoint region, occurs 
+3 times:
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff    --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_breakpoints_s1000_L10000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_2x_breakpoints_s1000_L10000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_3x_breakpoints_s1000_L10000.tsv
+
+Note that only the first row of the output file (row 0) contains data from the unshuffled
+results. All other results rows reflect shuffled data. The full set of columns of output are:
+
+1. Run number (starts at 0 for unshuffled results)
+2. Real ratio from unshuffled data (the ratio of columns 6 & 7)
+3. Feature Breakpoint_region_bp    
+4. Non_breakpoint_region_bp        
+5. Feature_bp_inside      
+6. %Inside 
+7. Feature_bp_outside      
+8. %Outside        
+8. Shuffled_ratio  
+9. Above (number of times column 8 exceeds column 2)
+10. Same (number of times column 8 equals column 2)   
+11. Below (number of times column 8 is below column 2)
+
+
+Here are the principle results for a breakpoint region size of 1 Kbp with 1000 shuffles. The 
+last 3 columns of output count how many times the observed ratio from the real data was
+exceeded, equalled, or not exceeded/equalled in the 1000 shufflings:
+
+	tail -n 19 FRAG00062_breakpoints_1Kbp.tsv | cut -f 2,3,11-13
+	1.0765  CDS     121     0       879
+	0.9328  DNA_replication_origin  669     0       331
+	1.0909  exon    156     0       844
+	1.1862  five_prime_UTR  241     0       759
+	1.1476  gene    26      0       974
+	1.1004  mRNA    89      0       911
+	0.0000  miRNA   129     871     0
+	0.2096  ncRNA   574     0       426
+	1.1142  protein 61      0       939
+	0.0000  pseudogene      672     328     0
+	0.0000  pseudogenic_exon        672     328     0
+	0.0000  pseudogenic_transcript  672     328     0
+	0.7439  satellite       967     0       33
+	0.0000  snoRNA  60      940     0
+	1.6351  tRNA    149     0       851
+	1.8220  three_prime_UTR 3       0       997
+	0.5809  transposable_element    997     0       3
+	0.6135  transposable_element_gene       935     0       65
+	0.5551  transposon_fragment     996     0       4
+
+So in this result file, genes are the only feature that are enriched (P < 0.05) and
+various repeat elements are significantly underrepresented (e.g. P < 0.01 for 
+transposable_element features). However, this might be a logical consequence of genes
+being enriched (two features can't always occupy the same space).
+
+	grep -w gene FRAG00062_breakpoints_1Kbp.tsv  | grep -E "^0" | cut -f 3-9
+	gene    87307   30272664        52793   60.47   15950976        52.69
+
+Gene features in this dataset account for ~60% of breakpoint regions compared to ~53%
+of non-breakpoint regions. When we extend to a larger size of breakpoint region (10 Kbp),
+we see similar results, but more enrichment of replication origins:
+
+	tail -n 19 FRAG00062_breakpoints_10Kbp.tsv | cut -f 2,3,11-13
+	1.1276  CDS     5       0       995
+	1.2774  DNA_replication_origin  423     0       577
+	1.0223  exon    434     1       565
+	1.0341  five_prime_UTR  382     0       618
+	1.1447  gene    2       0       998
+	1.0783  mRNA    38      0       962
+	1.2578  miRNA   160     0       840
+	0.5390  ncRNA   770     0       230
+	1.1566  protein 0       0       1000
+	0.8835  pseudogene      379     0       621
+	0.9621  pseudogenic_exon        328     0       672
+	0.8835  pseudogenic_transcript  379     0       621
+	0.7181  satellite       1000    0       0
+	0.0000  snoRNA  432     568     0
+	0.1837  tRNA    894     0       106
+	1.1495  three_prime_UTR 47      0       953
+	0.6048  transposable_element    1000    0       0
+	0.4205  transposable_element_gene       998     0       2
+	0.6098  transposon_fragment     999     0       1
+
+With a larger region size, many gene-related features become significantly enriched
+(P < 0.01 for CDS, gene, and protein). Enrichment of replication origins is not significant.
+At the largest breakpoint region size that I chose (50 Kbp), gene-related features
+remain significantly enriched, even if the actual ratios become much lower:
+
+	tail -n 19 FRAG00062_breakpoints_50Kbp.tsv | cut -f 2,3,11-13
+	1.0764  CDS     9       0       991
+	0.9004  DNA_replication_origin  879     0       121
+	0.9801  exon    878     1       121
+	1.1176  five_prime_UTR  54      0       946
+	1.0800  gene    8       0       992
+	1.0115  mRNA    352     4       644
+	0.8165  miRNA   312     0       688
+	0.5308  ncRNA   938     0       62
+	1.0847  protein 6       0       994
+	1.2193  pseudogene      17      0       983
+	0.9997  pseudogenic_exon        178     0       822
+	1.2193  pseudogenic_transcript  17      0       983
+	0.7842  satellite       988     0       12
+	0.0000  snoRNA  944     56      0
+	1.3975  tRNA    174     0       826
+	1.0690  three_prime_UTR 57      3       940
+	0.6428  transposable_element    1000    0       0
+	0.3878  transposable_element_gene       1000    0       0
+	0.6452  transposon_fragment     1000    0       0
+
+The percentage of bp of gene features inside and outside breakpoint regions now narrows
+to just 56.4% and 52.2%. At the other extreme, a breakpoint region of just 100 bp still
+sees significant enrichment of genes (P < 0.05):
+
+	tail -n 19 FRAG00062_breakpoints_100bp.tsv | cut -f 2,3,11-13
+	1.1372  CDS     112     0       888
+	0.9589  DNA_replication_origin  573     0       427
+	1.1628  exon    67      0       933
+	1.4412  five_prime_UTR  185     0       815
+	1.1497  gene    25      0       975
+	1.0995  mRNA    112     0       888
+	0.0000  miRNA   32      968     0
+	0.0000  ncRNA   424     576     0
+	1.0635  protein 173     0       827
+	0.0000  pseudogene      441     559     0
+	0.0000  pseudogenic_exon        435     565     0
+	0.0000  pseudogenic_transcript  441     559     0
+	0.7886  satellite       873     0       127
+	0.0000  snoRNA  16      984     0
+	5.7529  tRNA    62      0       938
+	1.8473  three_prime_UTR 57      0       943
+	0.5152  transposable_element    993     0       7
+	0.5986  transposable_element_gene       898     0       102
+	0.4601  transposon_fragment     998     0       2
+
+
+## Conclusion 1: genes are significantly enriched in breakpoint regions of all sizes
+
+Can now look to see whether the same pattern holds true when considering 2x or 3x regions
+separately. Again, starting at 1 Kbp breakpoint regions (2x results on top):
+
+	tail -n 19 FRAG00062_2x_breakpoints_1Kbp.tsv | cut -f 2,3,11-13; echo; tail -n 19 FRAG00062_3x_breakpoints_1Kbp.tsv | cut -f 2,3,11-13
+	1.1842  CDS     63      0       937
+	0.0000  DNA_replication_origin  920     80      0
+	1.1536  exon    103     0       897
+	1.5011  five_prime_UTR  124     0       876
+	1.2893  gene    4       0       996
+	1.1736  mRNA    35      0       965
+	0.0000  miRNA   52      948     0
+	0.0000  ncRNA   396     604     0
+	1.2076  protein 37      0       963
+	0.0000  pseudogene      434     566     0
+	0.0000  pseudogenic_exon        434     566     0
+	0.0000  pseudogenic_transcript  434     566     0
+	0.5646  satellite       989     0       11
+	0.0000  snoRNA  36      964     0
+	0.0000  tRNA    221     779     0
+	2.1291  three_prime_UTR 5       0       995
+	0.3110  transposable_element    997     0       3
+	0.0000  transposable_element_gene       991     9       0
+	0.3191  transposon_fragment     997     0       3
+
+	0.9882  CDS     446     3       551
+	1.9026  DNA_replication_origin  211     0       789
+	1.0435  exon    408     0       592
+	0.8264  five_prime_UTR  623     0       377
+	1.0136  gene    374     0       626
+	1.0364  mRNA    385     0       615
+	0.0000  miRNA   62      938     0
+	0.4276  ncRNA   320     0       680
+	1.0320  protein 333     0       667
+	0.0000  pseudogene      397     603     0
+	0.0000  pseudogenic_exon        397     603     0
+	0.0000  pseudogenic_transcript  397     603     0
+	0.9180  satellite       678     0       322
+	0.0000  snoRNA  23      977     0
+	3.3352  tRNA    70      0       930
+	1.5318  three_prime_UTR 72      0       928
+	0.8548  transposable_element    814     0       186
+	1.2515  transposable_element_gene       489     0       511
+	0.7935  transposon_fragment     867     0       133
+
+There is a striking difference in the ratios of replication origins, and to a lesser-extent
+to gene-related features. Breakpoints that flank duplicated (2x) blocks are more likely to
+be enriched for gene-related features, but triplicated blocks (3x) have more replication
+origins (though this may not be significant).
+
+At 10 Kbp (though not at other sizes), the increase of replication origins in 3x blocks
+appears significant (P < 0.05):
+
+	tail -n 19 FRAG00062_2x_breakpoints_10Kbp.tsv | cut -f 2,3,11-13; echo; tail -n 19 FRAG00062_3x_breakpoints_10Kbp.tsv | cut -f 2,3,11-13
+	1.1017  CDS     65      0       935
+	0.2077  DNA_replication_origin  986     0       14
+	0.9516  exon    836     0       164
+	0.9697  five_prime_UTR  572     0       428
+	1.1664  gene    6       0       994
+	1.0600  mRNA    175     0       825
+	0.6745  miRNA   380     0       620
+	0.1337  ncRNA   831     0       169
+	1.1786  protein 4       0       996
+	1.4328  pseudogene      146     0       854
+	1.5598  pseudogenic_exon        126     0       874
+	1.4328  pseudogenic_transcript  146     0       854
+	0.6646  satellite       996     0       4
+	0.0000  snoRNA  225     775     0
+	0.0000  tRNA    861     139     0
+	1.1905  three_prime_UTR 52      0       948
+	0.5516  transposable_element    995     0       5
+	0.0000  transposable_element_gene       1000    0       0
+	0.5631  transposon_fragment     994     0       6
+
+	1.1737  CDS     11      0       989
+	2.4161  DNA_replication_origin  41      0       959
+	1.1120  exon    55      0       945
+	1.0853  five_prime_UTR  291     0       709
+	1.1366  gene    30      0       970
+	1.1127  mRNA    26      0       974
+	1.8390  miRNA   112     0       888
+	0.9709  ncRNA   411     0       589
+	1.1525  protein 21      0       979
+	0.2467  pseudogene      822     0       178
+	0.2682  pseudogenic_exon        807     0       193
+	0.2467  pseudogenic_transcript  822     0       178
+	0.7702  satellite       935     0       65
+	0.0000  snoRNA  247     753     0
+	0.3825  tRNA    555     0       445
+	1.1063  three_prime_UTR 171     0       829
+	0.6545  transposable_element    975     0       25
+	0.8754  transposable_element_gene       808     0       192
+	0.6524  transposon_fragment     973     0       27
 	
-Now re-run overlap script (but maybe with just 1,000 shuffles). Han expects there to be a
-difference with more notable enrichment of genomic features around 3x blocks rather than 2x.
-Will use default breakpoint region size of 10,000 bp:
+However, at this region size, 3x regions also appear significantly enriched for gene features
+but to a lesser extent in 3x regions. Here are the results for just genes and replication
+origin features across all 2x/3x output files:
 
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_2x_breakpoints_s100_L10000.tsv
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_3x_breakpoints_s100_L10000.tsv
+	tail -n 19 FRAG00062_*x_*.tsv | grep -Ew "==>|gene|DNA_replication_origin" | cut -f 2,3,11-13
+	==> FRAG00062_2x_breakpoints_100bp.tsv <==
+	0.0000  DNA_replication_origin  865     135     0
+	1.3193  gene    4       0       996
+	==> FRAG00062_2x_breakpoints_10Kbp.tsv <==
+	0.2077  DNA_replication_origin  986     0       14
+	1.1664  gene    6       0       994
+	==> FRAG00062_2x_breakpoints_1Kbp.tsv <==
+	0.0000  DNA_replication_origin  920     80      0
+	1.2893  gene    4       0       996
+	==> FRAG00062_2x_breakpoints_25Kbp.tsv <==
+	0.4650  DNA_replication_origin  968     0       32
+	1.0901  gene    46      1       953
+	==> FRAG00062_2x_breakpoints_2Kbp.tsv <==
+	0.1613  DNA_replication_origin  929     0       71
+	1.2647  gene    2       0       998
+	==> FRAG00062_2x_breakpoints_500bp.tsv <==
+	0.0000  DNA_replication_origin  900     100     0
+	1.3100  gene    2       0       998
+	==> FRAG00062_2x_breakpoints_50Kbp.tsv <==
+	0.4673  DNA_replication_origin  994     0       6
+	1.0762  gene    56      0       944
+	==> FRAG00062_2x_breakpoints_5Kbp.tsv <==
+	0.1925  DNA_replication_origin  963     1       36
+	1.1705  gene    15      0       985
+
+	==> FRAG00062_3x_breakpoints_100bp.tsv <==
+	1.9523  DNA_replication_origin  125     146     729
+	0.9795  gene    483     0       517
+	==> FRAG00062_3x_breakpoints_10Kbp.tsv <==
+	2.4161  DNA_replication_origin  41      0       959
+	1.1366  gene    30      0       970
+	==> FRAG00062_3x_breakpoints_1Kbp.tsv <==
+	1.9026  DNA_replication_origin  211     0       789
+	1.0136  gene    374     0       626
+	==> FRAG00062_3x_breakpoints_25Kbp.tsv <==
+	1.7445  DNA_replication_origin  165     0       835
+	1.1510  gene    3       0       997
+	==> FRAG00062_3x_breakpoints_2Kbp.tsv <==
+	2.0706  DNA_replication_origin  150     0       850
+	1.0800  gene    148     0       852
+	==> FRAG00062_3x_breakpoints_500bp.tsv <==
+	1.8882  DNA_replication_origin  250     0       750
+	0.9880  gene    421     1       578
+	==> FRAG00062_3x_breakpoints_50Kbp.tsv <==
+	1.3704  DNA_replication_origin  318     0       682
+	1.0852  gene    56      0       944
+	==> FRAG00062_3x_breakpoints_5Kbp.tsv <==
+	2.2055  DNA_replication_origin  104     0       896
+	1.1063  gene    82      0       918
+
+Genes are most enriched in 2x breakpoint regions of size 100 bp (1.32 fold increase) and
+significantly enriched (P < 0.01) at all sizes apart from 25 Kbp (P < 0.05) and 50 Kbp
+(NS). Genes are moderately enriched in all 3x breakpoint regions apart from 100 bp and
+only highly significantly enriched (P < 0.01) in 25 Kbp regions (weakly significant, 
+P < 0.05 in 10 Kbp regions).
+
+In contrast, replication origins were most enriched in 10 Kbp 3x regions (2.42 fold
+increase) and this was the only size where they were significantly enriched (P < 0.05).
+In 2x breakpoint regions, replication origins are never enriched.
+
+	
+## Conclusion 2: significant enrichment of genes mostly occurs in 2x regions 
+
+## Conclusion 3: enrichment of replication origins only occurs in 3x regions
 
 
+### FRAG00045 results
 
+The FRAG00045 line only consists of duplicated blocks, so no 3x regions are present. In
+the 10 Kbp region result file, no significantly enriched features are detected apart 
+from 5' UTRs (P < 0.05):
 
+	tail -n 19 FRAG00045_breakpoints_10Kbp.tsv | cut -f 2,3,11-13
+	1.0584  CDS     170     0       830
+	1.4244  DNA_replication_origin  340     0       660
+	1.0134  exon    486     0       514
+	1.3360  five_prime_UTR  48      0       952
+	1.0818  gene    108     0       892
+	1.0445  mRNA    285     0       715
+	0.0000  miRNA   282     718     0
+	2.1837  ncRNA   108     0       892
+	1.0712  protein 137     1       862
+	0.0000  pseudogene      846     154     0
+	0.0000  pseudogenic_exon        846     154     0
+	0.0000  pseudogenic_transcript  846     154     0
+	0.9193  satellite       635     0       365
+	0.0000  snoRNA  155     845     0
+	0.0000  tRNA    729     271     0
+	1.1155  three_prime_UTR 199     0       801
+	0.6484  transposable_element    952     0       48
+	0.6349  transposable_element_gene       900     0       100
+	0.6654  transposon_fragment     948     0       52
+
+Here are the results that focus only on genes and replication origins across all breakpoint
+region sizes:
+
+	tail -n 19 FRAG00045_*.tsv | grep -Ew "==>|gene|DNA_replication_origin" | cut -f 2,3,11-13
+	==> FRAG00045_breakpoints_100bp.tsv <==
+	0.9543  DNA_replication_origin  390     328     282
+	1.0655  gene    318     1       681
+	==> FRAG00045_breakpoints_10Kbp.tsv <==
+	1.4244  DNA_replication_origin  340     0       660
+	1.0818  gene    108     0       892
+	==> FRAG00045_breakpoints_1Kbp.tsv <==
+	0.9543  DNA_replication_origin  503     172     325
+	1.0242  gene    355     0       645
+	==> FRAG00045_breakpoints_25Kbp.tsv <==
+	1.2519  DNA_replication_origin  437     0       563
+	1.0914  gene    74      0       926
+	==> FRAG00045_breakpoints_2Kbp.tsv <==
+	0.9543  DNA_replication_origin  492     106     402
+	1.0247  gene    365     0       635
+	==> FRAG00045_breakpoints_500bp.tsv <==
+	0.9543  DNA_replication_origin  451     235     314
+	1.0350  gene    330     0       670
+	==> FRAG00045_breakpoints_50Kbp.tsv <==
+	0.9370  DNA_replication_origin  675     0       325
+	1.0927  gene    63      0       937
+	==> FRAG00045_breakpoints_5Kbp.tsv <==
+	1.4082  DNA_replication_origin  382     0       618
+	1.0977  gene    130     0       870
+
+Genes are only enriched (in terms of their ratio being positive) in 5 Kbp, 10 Kbp, 25 Kbp 
+region sizes, but none of these are significant. Strangely, 5' UTRs (but no 3' UTRs) are
+significantly enriched in some large breakpoint sizes (10 Kbp, 25 Kbp, 50 Kbp) with
+the latter two sizes being highly significant (P < 0.01):
+
+	tail -n 19 FRAG00045_*.tsv | grep -E "==>|UTR" | cut -f 2,3,11-13
+	==> FRAG00045_breakpoints_100bp.tsv <==
+	2.5508  five_prime_UTR  59      2       939
+	0.5452  three_prime_UTR 698     1       301
+	==> FRAG00045_breakpoints_10Kbp.tsv <==
+	1.3360  five_prime_UTR  48      0       952
+	1.1155  three_prime_UTR 199     0       801
+	==> FRAG00045_breakpoints_1Kbp.tsv <==
+	1.7759  five_prime_UTR  75      0       925
+	1.0760  three_prime_UTR 373     1       626
+	==> FRAG00045_breakpoints_25Kbp.tsv <==
+	1.3489  five_prime_UTR  11      0       989
+	1.1645  three_prime_UTR 59      0       941
+	==> FRAG00045_breakpoints_2Kbp.tsv <==
+	1.6390  five_prime_UTR  62      0       938
+	1.0842  three_prime_UTR 320     0       680
+	==> FRAG00045_breakpoints_500bp.tsv <==
+	2.0724  five_prime_UTR  73      1       926
+	0.4192  three_prime_UTR 828     1       171
+	==> FRAG00045_breakpoints_50Kbp.tsv <==
+	1.3177  five_prime_UTR  7       0       993
+	1.1445  three_prime_UTR 64      0       936
+	==> FRAG00045_breakpoints_5Kbp.tsv <==
+	1.2854  five_prime_UTR  126     0       874
+	1.2761  three_prime_UTR 92      0       908
+
+## Conclusion 4: not all FRAG lines may exhibit the same patterns of feature enrichment
