@@ -359,7 +359,7 @@ sees significant enrichment of genes (P < 0.05):
 	0.4601  transposon_fragment     998     0       2
 
 
-## Conclusion 1: genes are significantly enriched in breakpoint regions of all sizes
+#### Conclusion 1: genes are significantly enriched in breakpoint regions of all sizes
 
 Can now look to see whether the same pattern holds true when considering 2x or 3x regions
 separately. Again, starting at 1 Kbp breakpoint regions (2x results on top):
@@ -520,9 +520,9 @@ increase) and this was the only size where they were significantly enriched (P <
 In 2x breakpoint regions, replication origins are never enriched.
 
 	
-## Conclusion 2: significant enrichment of genes mostly occurs in 2x regions 
+#### Conclusion 2: significant enrichment of genes mostly occurs in 2x regions 
 
-## Conclusion 3: enrichment of replication origins only occurs in 3x regions
+#### Conclusion 3: enrichment of replication origins only occurs in 3x regions
 
 
 ### FRAG00045 results
@@ -612,7 +612,7 @@ the latter two sizes being highly significant (P < 0.01):
 	1.2854  five_prime_UTR  126     0       874
 	1.2761  three_prime_UTR 92      0       908
 
-## Conclusion 4: not all FRAG lines may exhibit the same patterns of feature enrichment
+#### Conclusion 4: not all FRAG lines may exhibit the same patterns of feature enrichment
 
 
 ### New script to just count breakpoints that contain features of interest ###
@@ -655,8 +655,8 @@ breakpoint regions, and testing different sizes of breakpoint regions:
 	FINAL: Processed 44 breakpoint regions, found 44 (100.0%) overlap with gene
 	FINAL: Processed 44 breakpoint regions, found 20 (45.5%) overlap with DNA_replication_origin
 	
-## Conclusion 5: Breakpoint regions of 10 Kbp or larger are almost certain to contain at 
-## least one gene (in either 2x or 3x data sets)	
+#### Conclusion 5: Breakpoint regions of 10 Kbp or larger are almost certain to contain at 
+#### least one gene (in either 2x or 3x data sets)	
 
-## Conclusion 6: The majority of 3x breakpoint regions do *not* contain replication origins, 
-## however they are more likely to contain them than 2x breakpoint regions
+#### Conclusion 6: The majority of 3x breakpoint regions do *not* contain replication origins, 
+#### however they are more likely to contain them than 2x breakpoint regions
