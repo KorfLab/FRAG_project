@@ -5,7 +5,7 @@ To contain code and data files for the Fragmentation project, investigating shat
 chromosome phenotypes in _Arabidopsis thaliana_.
 	
 	
-## Background ## 
+## Background
 
 Raw data from Han's mapping of reads back to reference genome is in the file:
 
@@ -21,7 +21,7 @@ triplications. Actual values are slightly lower than this.
 
 
 
-### Making Master GFF file of all genomic features ###
+### Making Master GFF file of all genomic features
 
 TAIR has separate GFF files for various features on their FTP (not all in one master file).
 So:
@@ -655,8 +655,6 @@ breakpoint regions, and testing different sizes of breakpoint regions:
 	FINAL: Processed 44 breakpoint regions, found 44 (100.0%) overlap with gene
 	FINAL: Processed 44 breakpoint regions, found 20 (45.5%) overlap with DNA_replication_origin
 	
-#### Conclusion 5: Breakpoint regions of 10 Kbp or larger are almost certain to contain at 
-#### least one gene (in either 2x or 3x data sets)	
+#### Conclusion 5: Breakpoint regions of 10 Kbp or larger are almost certain to contain at least one gene (in either 2x or 3x data sets)	
 
-#### Conclusion 6: The majority of 3x breakpoint regions do *not* contain replication origins, 
-#### however they are more likely to contain them than 2x breakpoint regions
+#### Conclusion 6: The majority of 3x breakpoint regions do *not* contain replication origins, however they are more likely to contain them than 2x breakpoint regions
