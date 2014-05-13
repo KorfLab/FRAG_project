@@ -613,3 +613,50 @@ the latter two sizes being highly significant (P < 0.01):
 	1.2761  three_prime_UTR 92      0       908
 
 ## Conclusion 4: not all FRAG lines may exhibit the same patterns of feature enrichment
+
+
+### New script to just count breakpoints that contain features of interest ###
+
+Now that we have a good idea about the pattern of genes and replication origins in 
+breakpoint regions, I wanted to more simply ask 'how many breakpoint regions' contain
+at least 1 gene or replication origin (simply overlapping by a single bp counts as 
+'contained' in this case). Previously we are looking at the total amount of bp that a 
+feature occupies in breakpoint regions, but maybe just knowing that 'at least one' 
+feature is in a breakpoint region is enough?
+
+I wrote a script to just do this. First I combined just the gene and replication origins
+into a new GFF file (to make things fast). We are really interested in comparing 2x and 3x
+breakpoint regions, and testing different sizes of breakpoint regions:
+
+	# 1000 bp
+	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --bp 1000
+	FINAL: Processed 46 breakpoint regions, found 39 (84.8%) overlap with gene
+	FINAL: Processed 46 breakpoint regions, found 0 (0.0%) overlap with DNA_replication_origin
+
+	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --bp 1000
+	FINAL: Processed 44 breakpoint regions, found 33 (75.0%) overlap with gene
+	FINAL: Processed 44 breakpoint regions, found 5 (11.4%) overlap with DNA_replication_origin
+
+	# 10,000 bp
+	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --bp 10000
+	FINAL: Processed 46 breakpoint regions, found 45 (97.8%) overlap with gene
+	FINAL: Processed 46 breakpoint regions, found 4 (8.7%) overlap with DNA_replication_origin
+
+	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --bp 10000
+	FINAL: Processed 44 breakpoint regions, found 42 (95.5%) overlap with gene
+	FINAL: Processed 44 breakpoint regions, found 17 (38.6%) overlap with DNA_replication_origin
+
+	# 25,000 bp
+	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --bp 25000
+	FINAL: Processed 46 breakpoint regions, found 46 (100.0%) overlap with gene
+	FINAL: Processed 46 breakpoint regions, found 10 (21.7%) overlap with DNA_replication_origin
+
+	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --bp 25000
+	FINAL: Processed 44 breakpoint regions, found 44 (100.0%) overlap with gene
+	FINAL: Processed 44 breakpoint regions, found 20 (45.5%) overlap with DNA_replication_origin
+	
+## Conclusion 5: Breakpoint regions of 10 Kbp or larger are almost certain to contain at 
+## least one gene (in either 2x or 3x data sets)	
+
+## Conclusion 6: The majority of 3x breakpoint regions do *not* contain replication origins, 
+## however they are more likely to contain them than 2x breakpoint regions
