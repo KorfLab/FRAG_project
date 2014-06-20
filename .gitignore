@@ -1,0 +1,4 @@
+# don't include big data files
+*.tsv
+*.gff
+*.xlsx
