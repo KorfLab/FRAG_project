@@ -549,5 +549,30 @@ Will use default breakpoint region size of 10,000 bp:
 	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff all_TAIR10_features.gff --shuffles 100 --verbose > FRAG00062_3x_breakpoints_s100_L10000.tsv
 
 
+### Try to look for overlap between breakpoint regions and DNase I hypersensitive sites (DHS) ###
+
+This paper by Zhang et al. (2012) describes a set of hypersensitive sites in A. thaliana:
+
+[Genome-Wide Identification of Regulatory DNA Elements and Protein-Binding Footprints 
+Using Signatures of Open Chromatin in Arabidopsis](http://www.plantcell.org/content/24/7/2719.full)
+
+In this paper, they generate DHS maps for seed and flower tissues. These data were submitted
+to the GEO database and are available under accession [GSE34318](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE34318).
+One of the data files in in BED format (GSE34318_dhsites_region.bed) and this includes the 
+location of DHS regions (presumably after some threshold value has been exceeded) for both 
+leaf and seed tissues.
+
+I extracted just the DHS regions that were identified in wildtype leaf libraries, and 
+converted to GFF.
+
+First quick replacement of spaces with tabs in downloaded bed file and then convert to 
+desired GFF format with simple Perl script:
+
+	tr ' ' '\t' < GSE34318_dhsites_region.bed  | grep wtleaf| sort -k 1,1 -k 2n,2n   > GSE34318_dhsites_region_sorted.bed
+	./bed2gff.pl GSE34318_dhsites_region_sorted.bed  > DHS.gff
+
+
+
+
 
 
