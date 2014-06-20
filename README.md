@@ -545,8 +545,6 @@ P < 0.05 in 10 Kbp regions).
 In contrast, replication origins were most enriched in 10 Kbp 3x regions (2.42 fold
 increase) and this was the only size where they were significantly enriched (P < 0.05).
 In 2x breakpoint regions, replication origins are never enriched.
->>>>>>> cfe24b2a7056681ed2559bd89ac1977f7ccc99d8
-
 	
 #### Conclusion 2: significant enrichment of genes mostly occurs in 2x regions 
 
@@ -710,9 +708,17 @@ desired GFF format with simple Perl script:
 
 	tr ' ' '\t' < GSE34318_dhsites_region.bed  | grep wtleaf| sort -k 1,1 -k 2n,2n   > GSE34318_dhsites_region_sorted.bed
 	./bed2gff.pl GSE34318_dhsites_region_sorted.bed  > DHS.gff
+	
+Now combine with main file:
 
+	cat DHS.gff >> all_TAIR10_features.gff
+	sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
 
+Now compare to our master GFF files of breakpoints. Again we may want to try several breakpoint 
+region sizes (and do this for 2x and 3x). Will use a wrapper script that will look at 
+FRAG00045 and FRAG00062 (2x and 3x) for various sizes. Commands will again be in the form
+of:
 
-
+	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_2x_breakpoints_s1000_L10000.tsv
 
 

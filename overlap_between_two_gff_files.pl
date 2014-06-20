@@ -116,7 +116,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	my %tmp_results;
 	# not the quickest way to do this, but ensures we don't run out of memory
 
-	my @gff_features = qw(CDS DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
+	my @gff_features = qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
 
 	foreach my $gff_feature (@gff_features){
 		warn "\tProcessing $gff_feature data\n" if ($verbose);
@@ -130,6 +130,9 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
 
 		while(my $line = <$in>){
+			# skip GFF header lines
+			next if ($line =~ m/^#/);
+			
 			my ($chr, undef, $feature, $s, $e, undef, undef, undef, undef) = split(/\t/, $line);	
 
 			# only want to look at one feature at a time
