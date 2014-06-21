@@ -116,7 +116,20 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	my %tmp_results;
 	# not the quickest way to do this, but ensures we don't run out of memory
 
-	my @gff_features = qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
+	my @gff_features;
+#	push (@gff_features, qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon));
+#	push (@gff_features, qw(five_prime_UTR gene mRNA miRNA ncRNA));
+#	push (@gff_features, qw(protein pseudogene pseudogenic_exon pseudogenic_transcript)); 
+#	push (@gff_features, qw(satellite snoRNA tRNA three_prime_UTR transposable_element));
+#	push (@gff_features, qw(transposable_element_gene transposon_fragment));
+
+	# this is a bit of a hack, will have 9 different features for open_chromatin_state
+	# even though they all share the same GFF feature name
+	push (@gff_features, qw(open_chromatin_state_1 open_chromatin_state_2));
+	push (@gff_features, qw(open_chromatin_state_3 open_chromatin_state_4));
+	push (@gff_features, qw(open_chromatin_state_5 open_chromatin_state_6));
+	push (@gff_features, qw(open_chromatin_state_7 open_chromatin_state_8));
+	push (@gff_features, qw(open_chromatin_state_9));
 
 	foreach my $gff_feature (@gff_features){
 		warn "\tProcessing $gff_feature data\n" if ($verbose);
@@ -129,14 +142,21 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	 
 		open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
 
-		while(my $line = <$in>){
+		LINE: while(my $line = <$in>){
+			chomp($line);
 			# skip GFF header lines
 			next if ($line =~ m/^#/);
 			
-			my ($chr, undef, $feature, $s, $e, undef, undef, undef, undef) = split(/\t/, $line);	
+			my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
 
 			# only want to look at one feature at a time
-			next unless $feature eq $gff_feature;
+			if ($gff_feature =~ m/open_chromatin_state/){
+				my ($number) = $gff_feature =~ m/_(\d)/;
+
+				next LINE unless ($feature =~ m/open_chromatin_state/ and $comment =~ m/state$number/);
+			} else{
+				next LINE unless $feature eq $gff_feature;
+			}	
 	
 			# temporarily skip if not chr1 or chr4?
 			next unless (($chr eq 'Chr1') or ($chr eq 'Chr4'));
@@ -205,6 +225,9 @@ for (my $i = 0; $i <= $shuffles; $i++){
 
 		# do a couple of things differently now based on whether this is the
 		# first run (main results) or a shuffled result
+
+		# assess significance
+		my $stats_ratio;
 				
 		if ($i == 0){
 			$main_results{$gff_feature}{ratio_over}  = 0;
@@ -212,6 +235,8 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			$main_results{$gff_feature}{ratio_same}  = 0;
 		
 			$main_results{$gff_feature}{ratio} = $tmp_ratio;
+			$stats_ratio = 1;
+
 		} else{		
 			# if we are shuffling (i.e. $i > 0), we want to count whether the current ratio 
 			# (from shuffling) beats real ratio in unshuffled data
@@ -222,6 +247,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			} else{
 				$main_results{$gff_feature}{ratio_same}++;
 			}
+			$stats_ratio = $main_results{$gff_feature}{ratio_over} / $i;
 		}
 
 
@@ -237,8 +263,19 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		print "$tmp_ratio\t";
 		print "$main_results{$gff_feature}{ratio_over}\t";
 		print "$main_results{$gff_feature}{ratio_same}\t";
-		print "$main_results{$gff_feature}{ratio_under}\n";
+		print "$main_results{$gff_feature}{ratio_under}";
 
+		if ($stats_ratio <= 0){
+			print "*****";
+		} elsif ($stats_ratio < 0.0001){
+			print "****";
+		} elsif ($stats_ratio < 0.001){
+			print "***";
+		} elsif ($stats_ratio < 0.01){
+			print "**";
+		}
+
+		print "\n";
 
 	}
 	

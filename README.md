@@ -722,3 +722,25 @@ of:
 	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_2x_breakpoints_s1000_L10000.tsv
 
 
+### Now look at Chromatin state information ###
+
+This new paper by Sequeira-Mendes et al. (2014) describes a set of distinct chromatin 
+states in *A. thaliana*: 
+
+[The Functional Topography of the Arabidopsis Genome Is Organized in a Reduced Number of 
+Linear Motifs of Chromatin States](http://www.plantcell.org/content/early/2014/06/11/tpc.114.124578.long)
+
+They mostly use existing histone and other epigenetic modification data, but have some of
+their own. Using principal components analysis, they end up defining 9 different states
+of chromatin. These are available in supplemental data file 2 (Excel spreadsheet).
+
+I converted this to a GFF file. Sequence Ontology only has one term for chromatin
+(SO:0001747 open_chromatin_state) so I will use the 9th column of GFF to distinguish the
+9 different states.
+
+First export each tab in Excel spreadsheet to a text file (Windows formatted text), e.g
+state1.txt, state2.txt etc. Then simple Perl script to convert them to GFF.
+
+	./chromatin_state2gff.pl > tmp.gff
+	cat tmp.gff >> all_TAIR10_features.gff
+	sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
