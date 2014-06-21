@@ -72,7 +72,7 @@ my $pre_tailswap_length = 16541500; # coordinate from Han
 ####################################
 
 
-my @gff_features = qw(gene DNA_replication_origin);
+my @gff_features = qw(gene DNA_replication_origin DNAseI_hypersensitive_site);
 
 foreach my $gff_feature (@gff_features){
 
@@ -98,6 +98,9 @@ foreach my $gff_feature (@gff_features){
 
 		while(my $gff_line = <$in2>){
 			my ($chrB, undef, $featureB, $ss, $se, undef, undef, undef, undef) = split(/\t/, $gff_line);	
+
+			# skip comments
+			next if ($gff_line =~ m/^#/);
 
 			# only want to look at one feature at a time
 			next unless $featureB eq $gff_feature;
