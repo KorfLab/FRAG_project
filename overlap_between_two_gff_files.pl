@@ -117,11 +117,11 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	# not the quickest way to do this, but ensures we don't run out of memory
 
 	my @gff_features;
-#	push (@gff_features, qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon));
-#	push (@gff_features, qw(five_prime_UTR gene mRNA miRNA ncRNA));
-#	push (@gff_features, qw(protein pseudogene pseudogenic_exon pseudogenic_transcript)); 
-#	push (@gff_features, qw(satellite snoRNA tRNA three_prime_UTR transposable_element));
-#	push (@gff_features, qw(transposable_element_gene transposon_fragment));
+	push (@gff_features, qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon));
+	push (@gff_features, qw(five_prime_UTR gene mRNA miRNA ncRNA));
+	push (@gff_features, qw(protein pseudogene pseudogenic_exon pseudogenic_transcript)); 
+	push (@gff_features, qw(satellite snoRNA tRNA three_prime_UTR transposable_element));
+	push (@gff_features, qw(transposable_element_gene transposon_fragment));
 
 	# this is a bit of a hack, will have 9 different features for open_chromatin_state
 	# even though they all share the same GFF feature name
@@ -263,7 +263,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		print "$tmp_ratio\t";
 		print "$main_results{$gff_feature}{ratio_over}\t";
 		print "$main_results{$gff_feature}{ratio_same}\t";
-		print "$main_results{$gff_feature}{ratio_under}";
+		print "$main_results{$gff_feature}{ratio_under}\t";
 
 		if ($stats_ratio <= 0){
 			print "*****";

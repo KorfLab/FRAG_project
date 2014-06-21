@@ -744,3 +744,31 @@ state1.txt, state2.txt etc. Then simple Perl script to convert them to GFF.
 	./chromatin_state2gff.pl > tmp.gff
 	cat tmp.gff >> all_TAIR10_features.gff
 	sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
+
+Now try a final run with a new set of (simplified) breakpoint region sizes (100, 500,
+1 Kbp, 5 Kbp, 10 Kbp, and 20 Kbp). Final set of features that we are looking at is:
+
+CDS
+chromosome
+DNA_replication_origin
+exon
+five_prime_UTR
+gene
+miRNA
+mRNA
+ncRNA
+open_chromatin_state (9 different states)
+protein
+pseudogene
+pseudogenic_exon
+pseudogenic_transcript
+rRNA
+satellite
+snoRNA
+snRNA
+three_prime_UTR
+transposable_element
+transposable_element_gene
+transposon_fragment
+tRNA
+
