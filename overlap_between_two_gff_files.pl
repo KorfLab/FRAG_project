@@ -247,7 +247,13 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			} else{
 				$main_results{$gff_feature}{ratio_same}++;
 			}
-			$stats_ratio = $main_results{$gff_feature}{ratio_over} / $i;
+			# do something different for stat testing depending on whether main 
+			# ratio was above or below 1
+			if($main_results{$gff_feature}{ratio} >= 1){
+				$stats_ratio = $main_results{$gff_feature}{ratio_over} / $i;				
+			} else{
+				$stats_ratio = $main_results{$gff_feature}{ratio_under} / $i;							
+			}
 		}
 
 
@@ -265,7 +271,8 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		print "$main_results{$gff_feature}{ratio_same}\t";
 		print "$main_results{$gff_feature}{ratio_under}\t";
 
-		if ($stats_ratio <= 0){
+		if ($main_results{$gff_feature}{ratio} == 0){
+		}  elsif ($stats_ratio <= 0){
 			print "*****";
 		} elsif ($stats_ratio < 0.0001){
 			print "****";
