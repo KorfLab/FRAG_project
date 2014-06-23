@@ -712,7 +712,7 @@ desired GFF format with simple Perl script:
 Now combine with main file:
 
 	cat DHS.gff >> all_TAIR10_features.gff
-	sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
+	grep -vE "^#" all_TAIR10_features.gff | sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
 
 Now compare to our master GFF files of breakpoints. Again we may want to try several breakpoint 
 region sizes (and do this for 2x and 3x). Will use a wrapper script that will look at 
@@ -751,6 +751,7 @@ Now try a final run with a new set of (simplified) breakpoint region sizes (100,
 CDS
 chromosome
 DNA_replication_origin
+DNAseI_hypersensitive_site
 exon
 five_prime_UTR
 gene
