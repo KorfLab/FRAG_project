@@ -117,6 +117,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	# not the quickest way to do this, but ensures we don't run out of memory
 
 	my @gff_features;
+#	push (@gff_features, qw(gene DNA_replication_origin));
 	push (@gff_features, qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon));
 	push (@gff_features, qw(five_prime_UTR gene mRNA miRNA ncRNA));
 	push (@gff_features, qw(protein pseudogene pseudogenic_exon pseudogenic_transcript)); 
