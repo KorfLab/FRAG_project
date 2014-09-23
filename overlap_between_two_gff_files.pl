@@ -79,7 +79,7 @@ my $number_of_breakpoints = 0;
 #
 ####################################
 
-print "Run\tReal_ratio\tFeature\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
+print "Run\tReal_ratio\tBp\tFeature\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
 print "Feature_bp_inside\t%Inside\t";
 print "Feature_bp_outside\t%Outside\t";
 print "Shuffled_ratio\t";
@@ -258,9 +258,9 @@ for (my $i = 0; $i <= $shuffles; $i++){
 			}
 		}
 
-
 		print "$i\t";
 		print "$main_results{$gff_feature}{ratio}\t";
+		print "$bp\t";
 		print "$gff_feature\t";
 		print "$original_breakpoint_bp\t";
 		print "$original_non_breakpoint_bp\t";
