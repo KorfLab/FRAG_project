@@ -19,7 +19,7 @@ use Getopt::Long;
 #              Command-line options                  #
 ###################################################### 
 
-my ($breakpoint_gff, $feature_gff, $bp, $shuffles, $help, $verbose) = (undef, undef, 10000, 0, undef, undef);
+my ($breakpoint_gff, $feature_gff, $bp, $shuffles, $help, $type, $verbose) = (undef, undef, 10000, 0, undef, 'B', undef);
 
 my $usage = "$0 
 Mandatory arguments:
@@ -29,6 +29,7 @@ Mandatory arguments:
 Optional arguments:
 --bp <how many bp to extract from inside/outside region (default = $bp)>
 --shuffles <how many shuffling iterations to perform (default = $shuffles)>
+--type <nature of region to check for overlap (breakpoint, mid-point, inside-block, outside-block, default = $type)>
 --verbose - turn on extra output
 --help 
 	
@@ -40,6 +41,7 @@ GetOptions (
 	"bp=i"             => \$bp,
 	"shuffles=i"       => \$shuffles,
 	"help"             => \$help,
+	"type=s"           => \$type,
 	"verbose"          => \$verbose,
 );
 
@@ -79,7 +81,7 @@ my $number_of_breakpoints = 0;
 #
 ####################################
 
-print "Run\tReal_ratio\tBp\tFeature\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
+print "Run\tReal_ratio\tBp\tFeature\tType\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
 print "Feature_bp_inside\t%Inside\t";
 print "Feature_bp_outside\t%Outside\t";
 print "Shuffled_ratio\t";
@@ -117,7 +119,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	# not the quickest way to do this, but ensures we don't run out of memory
 
 	my @gff_features;
-#	push (@gff_features, qw(gene DNA_replication_origin));
+
 	push (@gff_features, qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon));
 	push (@gff_features, qw(five_prime_UTR gene mRNA miRNA ncRNA));
 	push (@gff_features, qw(protein pseudogene pseudogenic_exon pseudogenic_transcript)); 
@@ -132,6 +134,8 @@ for (my $i = 0; $i <= $shuffles; $i++){
 	push (@gff_features, qw(open_chromatin_state_7 open_chromatin_state_8));
 	push (@gff_features, qw(open_chromatin_state_9));
 
+	@gff_features =  qw(gene DNA_replication_origin);
+	
 	foreach my $gff_feature (@gff_features){
 		warn "\tProcessing $gff_feature data\n" if ($verbose);
 		
@@ -263,6 +267,7 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		print "$main_results{$gff_feature}{ratio}\t";
 		print "$bp\t";
 		print "$gff_feature\t";
+		print "$type\t";
 		print "$original_breakpoint_bp\t";
 		print "$original_non_breakpoint_bp\t";
 		print "$feature_overlapping_breakpoint_regions\t";
@@ -331,21 +336,49 @@ sub read_breakpoint_data{
 		# skip comments
 		next if ($line =~ m/^#/);
 
-		# want chromosome breakpoints, but ignore any which are effectively the ends of
-		# the chromosomes
-		next unless ($feature eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
-
-		$number_of_breakpoints++;
+		# what we do next depends on what type of data we want to use
+		# in all cases we want to end up with a min and max coordinate to span a
+		# region that will masked out of %chr_seqs
+		my ($min, $max);
+		
+		# can do some things the same for breakpoint, inside, and outside regions
+		if ($type =~ m/^[BIO]$/){
+		
+			# want chromosome breakpoints, but ignore any which are effectively the ends of
+			# the chromosomes
+			next unless ($feature eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
+			$number_of_breakpoints++;
 			
-		# now define a region around this breakpoint based on value of $bp
-		my ($min, $max) = ($s - $bp/2, $s + $bp/2);
-	
+			# min and max will be calculated differently based on $type
+
+			if ($type eq 'B'){
+				# define a region around this breakpoint based on value of $bp
+				($min, $max) = ($s - $bp/2, $s + $bp/2);
+			} elsif ($type eq 'I'){
+				# define a region around that extends into the block
+				($min, $max) = ($s, $s + $bp -1);			
+			} else{
+				# define a region around that extends away from the block
+				($min, $max) = ($s - $bp + 1, $s);			
+			}
+		} else{
+			# things are a bit different for midpoint regions (only 1 region per block)
+
+			next unless ($feature eq 'copy_number_gain');
+			$number_of_breakpoints++;
+			
+			# now define a region around the center of this block
+			my $mid_point = int($s + (($e - $s)/2));
+			($min, $max) = ($mid_point - $bp/2, $mid_point + $bp/2);
+		}
+
 		# mask where breakpoint regions are in chromosome
 		substr($chr_seqs{$chr}, $min, $bp) = ("B" x $bp);
 	}
 
 	close($in);
 }
+
 
 
 
