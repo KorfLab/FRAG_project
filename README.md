@@ -773,3 +773,37 @@ transposable_element_gene
 transposon_fragment
 tRNA
 
+
+### Updated results for paper ###
+
+Now want to reproduce results with more sizes of breakpoint regions. Only interested in 
+FRAG00062 at first, and will just use percentage of overlapping bp inside/outside breakpoint
+regions in the final figure.
+
+Modified overlap_between_two_gff_files.pl script at this point to also include the value
+of --bp in the final output file (now as 3rd column of output). Use bash loop script to do
+this. First for all breakpoint regions in increasing order of magnitude:
+
+#!/bin/bash
+
+for i in 10 100 1000 10000 100000 1000000;
+do
+        echo "./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_2x_${i}bp_for_paper.tsv \& ";
+        ./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_2x_${i}bp_for_paper.tsv \& ;
+        echo "./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_3x_${i}bp_for_paper.tsv \& ";
+        ./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_3x_${i}bp_for_paper.tsv \& ;
+done
+
+Combine results into two files (not properly sorted):
+
+	cat FRAG00062_2x_*for_paper* | sort -ru > 2x_for_paper_results_log.tsv
+	cat FRAG00062_3x_*for_paper* | sort -ru > 3x_for_paper_results_log.tsv
+
+Then try with modified loop (100 to 5000, in 100 bp increments. Just change first part of loop:
+
+	for i in {100..5000..100}
+	
+And then combine results as before (but with better sorting):
+
+	cat FRAG00062_2x_*for_paper* | sort -u | sort -k4,4 -k3n,3n > 2x_for_paper_results_100-5000.tsv
+	

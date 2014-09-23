@@ -72,8 +72,8 @@ my $pre_tailswap_length = 16541500; # coordinate from Han
 ####################################
 
 
-my @gff_features = qw(gene DNA_replication_origin DNAseI_hypersensitive_site);
-
+#my @gff_features = qw(gene DNA_replication_origin DNAseI_hypersensitive_site);
+my @gff_features = qw(gene DNA_replication_origin);
 foreach my $gff_feature (@gff_features){
 
 	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
