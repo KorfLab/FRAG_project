@@ -831,3 +831,4 @@ larger sizes (200Ð50,000 bp in 200 bp increments). Then tidy up:
 	cat FRAG00062_2x_*for_paper* | sort -u | sort -k4,4 -k5,5 -k3n,3n > 2x_for_paper_results_200-50000.tsv
 	cat FRAG00062_3x_*for_paper* | sort -u | sort -k4,4 -k5,5 -k3n,3n > 3x_for_paper_results_200-50000.tsv
 	
+Also did one more set of runs from 1,000 bp up to 250,000 bp in 1,000 increments.
