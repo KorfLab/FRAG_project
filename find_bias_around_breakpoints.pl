@@ -81,7 +81,7 @@ my %chr_seqs;
 
 print "Start\tEnd\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
 print "Feature_bp_inside\t%Inside\t";
-print "Feature_bp_outside\t%Outside\n";
+print "Feature_bp_outside\t%Outside\tRatio\n";
 
 # will want to store actual ratios from real data in a hash
 # key will be feature, value will be ratio. Do similar thing for differences
