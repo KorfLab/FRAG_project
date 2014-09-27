@@ -809,21 +809,15 @@ And then combine results as before (but with better sorting):
 	cat FRAG00062_3x_*for_paper* | sort -u | sort -k4,4 -k3n,3n > 3x_for_paper_results_100-5000.tsv
 
 Tried to make a modified version of overlap script which centers breakpoint regions around middle
-of blocks. But maybe better thing to do is make four versions in total:
+of blocks.
 
 1. Center regions around the breakpoint (as before)ÊÑÊcode = B
 2. Center regions around midpoint of block (leads to 1/2 as many datapoints) ÑÊcode = M
-3. Use regions from breakpoint facing inside block ÑÊcode = I
-4. Use regions from breakpoint facing outside block ÑÊcode = objects
-
-In all cases, at large region sizes, these regions will start overlapping with the next
-adjacent breakpoint. But collectively the results might indicate the nature of the 
-association of breakpoints and genes & DNA replication origins.
 
 I modified overlap script to take a new command-line parameter (--type) which can use B,
-I, O, or M (defaults to B). For types B and M, the region size is 1 bp greater than 
+or M (defaults to B). For both types, he region size is 1 bp greater than 
 specified (centered around a single base, e.g. 100 bp = 50 bp either side of center
-point). For types I and O, region size = specified bp.
+point). 
 
 Run all of this using double nested loop in bash_loop.sh script and iterate to 
 larger sizes (200Ð50,000 bp in 200 bp increments). Then tidy up:
@@ -832,3 +826,25 @@ larger sizes (200Ð50,000 bp in 200 bp increments). Then tidy up:
 	cat FRAG00062_3x_*for_paper* | sort -u | sort -k4,4 -k5,5 -k3n,3n > 3x_for_paper_results_200-50000.tsv
 	
 Also did one more set of runs from 1,000 bp up to 250,000 bp in 1,000 increments.
+
+
+### New script ###
+
+Finally attempted what I should have done all along. A script that uses a sliding window
+around the left or right edges of 2x or 3x blocks. Have to run separately for left vs right,
+2x vs 3x, and genes vs replication origins. Can use different ranges (how far out to go
+either side of breakpoint), window size, and step sizes. Defaults to +- 50,000 bp (range),
+2,500 bp (window size), and 500 bp (step size). 
+
+Needs 8 runs in total for all data:
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode left > figure_2x_genes_L.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode right > figure_2x_genes_R.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode left > figure_2x_origins_L.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode right > figure_2x_origins_R.tsv
+	
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode left > figure_3x_genes_L.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode right > figure_3x_genes_R.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode left > figure_3x_origins_L.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode right > figure_3x_origins_R.tsv
+	

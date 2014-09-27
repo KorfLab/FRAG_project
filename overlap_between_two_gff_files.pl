@@ -29,7 +29,7 @@ Mandatory arguments:
 Optional arguments:
 --bp <how many bp to extract from inside/outside region (default = $bp)>
 --shuffles <how many shuffling iterations to perform (default = $shuffles)>
---type <nature of region to check for overlap (breakpoint, mid-point, inside-block, outside-block, default = $type)>
+--type <nature of region to check for overlap (breakpoint (B) or mid-point (M), default = $type)>
 --verbose - turn on extra output
 --help 
 	
@@ -342,25 +342,16 @@ sub read_breakpoint_data{
 		my ($min, $max);
 		
 		# can do some things the same for breakpoint, inside, and outside regions
-		if ($type =~ m/^[BIO]$/){
+		if ($type eq 'B'){
 		
 			# want chromosome breakpoints, but ignore any which are effectively the ends of
 			# the chromosomes
 			next unless ($feature eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
 			$number_of_breakpoints++;
-			
-			# min and max will be calculated differently based on $type
-
-			if ($type eq 'B'){
-				# define a region around this breakpoint based on value of $bp
-				($min, $max) = ($s - $bp/2, $s + $bp/2);
-			} elsif ($type eq 'I'){
-				# define a region around that extends into the block
-				($min, $max) = ($s, $s + $bp -1);			
-			} else{
-				# define a region around that extends away from the block
-				($min, $max) = ($s - $bp + 1, $s);			
-			}
+		
+			# define a region around this breakpoint based on value of $bp
+			($min, $max) = ($s - $bp/2, $s + $bp/2);
+			 
 		} else{
 			# things are a bit different for midpoint regions (only 1 region per block)
 
