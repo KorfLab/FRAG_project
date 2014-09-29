@@ -838,13 +838,37 @@ either side of breakpoint), window size, and step sizes. Defaults to +- 50,000 b
 
 Needs 8 runs in total for all data:
 
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode left > figure_2x_genes_L.tsv
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode right > figure_2x_genes_R.tsv
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode left > figure_2x_origins_L.tsv
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode right > figure_2x_origins_R.tsv
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode left > figure_2x_genes_L.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode right > figure_2x_genes_R.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode both > figure_2x_genes_B.tsv &
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode left > figure_2x_origins_L.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode right > figure_2x_origins_R.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode both > figure_2x_origins_B.tsv &
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --v --mode left > figure_2x_DHS_L.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --v --mode right > figure_2x_DHS_R.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --v --mode both > figure_2x_DHS_B.tsv &
 	
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode left > figure_3x_genes_L.tsv
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode right > figure_3x_genes_R.tsv
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode left > figure_3x_origins_L.tsv
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode right > figure_3x_origins_R.tsv
-	
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode left > figure_3x_genes_L.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode right > figure_3x_genes_R.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode both > figure_3x_genes_B.tsv &
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode left > figure_3x_origins_L.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode right > figure_3x_origins_R.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode both > figure_3x_origins_B.tsv &
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode left > figure_3x_DHS_L.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode right > figure_3x_DHS_R.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode both > figure_3x_DHS_B.tsv &
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode both > figure_2x_genes_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode both > figure_3x_genes_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff state2.gff --v --mode both > figure_2x_state2_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff state2.gff --v --mode both > figure_3x_state2_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode both > figure_2x_origins_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode both > figure_3x_origins_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --v --mode both > figure_2x_DHS_B.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode both > figure_3x_DHS_B.tsv &
+
+

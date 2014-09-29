@@ -18,7 +18,7 @@ use Getopt::Long;
 ###################################################### 
 
 my ($breakpoint_gff, $feature_gff,  $help, $verbose, $mode) = (undef, undef, undef, undef, undef);
-my ($range, $bin_size, $step_size)  = (50000, 2500, 500);
+my ($range, $bin_size, $step_size)  = (5000, 100, 25);
 
 my $usage = "$0 
 Mandatory arguments:
@@ -26,7 +26,7 @@ Mandatory arguments:
 --feature_gff <GFF file of target feature>
 
 Optional arguments:
---mode <which edge of block to look at, left or right>
+--mode <which edge of block to look at, left, right, or both>
 --range <max distance from breakpoint, default = $range>
 --bin_size <interval to use, default = $bin_size>
 --step_size <interval to step over, default = $step_size>
@@ -79,7 +79,7 @@ my %chr_seqs;
 #
 ####################################
 
-print "Start\tEnd\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
+print "Start\tEnd\tMidpoint\tBreakpoint_bp\tNon_breakpoint_bp\t";
 print "Feature_bp_inside\t%Inside\t";
 print "Feature_bp_outside\t%Outside\tRatio\n";
 
@@ -92,8 +92,8 @@ my %main_results;
 initalize_virtual_chromosome_sequences();
 
 # read main breakpoint data and feature data and store in hashes
-my %breakpoints;
-read_breakpoint_data();
+my %blocks;
+read_block_data();
 
 my %features;
 read_feature_data(); 
@@ -107,6 +107,7 @@ my ($min, $max,) = (-$range, $range);
 for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 	
 	my ($s, $e) = ($i, $i + $bin_size);
+	my $mid = int($s + (($e - $s) / 2));
 #		print "$s $e\n"; 
 
 	# create copies of virtual chromosome sequences
@@ -116,30 +117,38 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 	my %tmp_chr_seqs_2 = %chr_seqs;
 
 	# now need to mask this coordinate range around each breakpoint
-	EDGE: foreach my $edge (sort {$a <=> $b} keys %breakpoints){
+	EDGE: foreach my $edge (sort {$a <=> $b} keys %blocks){
 	
-		my $bp_chr = $breakpoints{$edge}{'chr'};
-		my $left   = $breakpoints{$edge}{'left'};
-		my $right  = $breakpoints{$edge}{'right'};
+		my $bp_chr = $blocks{$edge}{'chr'};
+		my $left   = $blocks{$edge}{'left'};
+		my $right  = $blocks{$edge}{'right'};
 
 		# may not be able to deal with ends of some blocks if they are
-		# first or last on chromosome
-		next EDGE if ($mode eq 'left'  and ($left  - abs($s) < 1));
-		next EDGE if ($mode eq 'right' and ($right + abs($e) > $chr_sizes{$bp_chr}));
+		# first or last on chromosome (or if $bin_size is really large)
+		next EDGE if ($mode =~ m/left|both/  and ($left  - abs($s) < 1));
+		next EDGE if ($mode =~ m/left|both/  and ($left  + abs($e) > $chr_sizes{$bp_chr}));
+		next EDGE if ($mode =~ m/right|both/ and ($right - abs($s) < 1));
+		next EDGE if ($mode =~ m/right|both/ and ($right + abs($e) > $chr_sizes{$bp_chr}));
 
 #		print "$edge\t$bp_chr\t$left\t$right\t";
 		
 		# mask where breakpoint regions are in chromosome
 		if ($mode eq 'left'){
+#			print "$bp_chr\t$left\t$right\t", $left + $s, "\t", $left + $s + $bin_size, "\n";
 			substr($tmp_chr_seqs_1{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
 			substr($tmp_chr_seqs_2{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
-#			print $left + $s, "\t", $left + $s + $bin_size, "\t";
-		} else {
+		} elsif ($mode eq 'right') {
 			substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
 			substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
 #			print $right  + $s, "\t", $right + $s + $bin_size, "\t";
-
+		} else{
+			substr($tmp_chr_seqs_1{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
+			substr($tmp_chr_seqs_2{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
+			substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
+			substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);		
 		}
+		
+		
 #		print "\n";
 	}	
 	
@@ -156,7 +165,7 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 		substr($tmp_chr_seqs_2{$chr}, $s, $length) = ("o" x $length); 
  	}
 
-	# now compare patterns in original virtual sequence (just breakpoints)
+	# now compare patterns in original virtual sequence (just blocks)
 	# and tmp virtual sequence (masked with feature)
 	my $original_breakpoint_bp      = $tmp_chr_seqs_1{'Chr1'} =~ tr/B/B/;
 	$original_breakpoint_bp        += $tmp_chr_seqs_1{'Chr4'} =~ tr/B/B/;
@@ -188,21 +197,18 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 		$percent_overlapping_non_breakpoint_regions = ($feature_overlapping_non_breakpoint_regions / $original_non_breakpoint_bp) * 100;
 	}
 
-	my $tmp_ratio = sprintf("%.4f", $percent_overlapping_breakpoint_regions / $percent_overlapping_non_breakpoint_regions);
+	my $ratio = sprintf("%.4f", $percent_overlapping_breakpoint_regions / $percent_overlapping_non_breakpoint_regions);
 	$percent_overlapping_breakpoint_regions     = sprintf("%.2f", $percent_overlapping_breakpoint_regions);
 	$percent_overlapping_non_breakpoint_regions = sprintf("%.2f", $percent_overlapping_non_breakpoint_regions);
 	
-	print "$s $e\t"; 
+	print "$s\t$e\t$mid\t"; 
 	print "$original_breakpoint_bp\t";
 	print "$original_non_breakpoint_bp\t";
 	print "$feature_overlapping_breakpoint_regions\t";
 	print "$percent_overlapping_breakpoint_regions\t";
 	print "$feature_overlapping_non_breakpoint_regions\t";
 	print "$percent_overlapping_non_breakpoint_regions\t";
-	print "$tmp_ratio\t";
-
-
-
+	print "$ratio\t";
 	print "\n";
 
 }
@@ -237,7 +243,7 @@ sub initalize_virtual_chromosome_sequences{
 # read junction coordinates and represent in virtual sequences
 ###############################################################
 
-sub read_breakpoint_data{
+sub read_block_data{
 	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
 
 	my $block_counter = 0;
@@ -253,9 +259,9 @@ sub read_breakpoint_data{
 		$block_counter++;
 		
 		# 3 things to store for each block
-		$breakpoints{$block_counter}{'chr'}   = $chr;
-		$breakpoints{$block_counter}{'left'}  = $s;
-		$breakpoints{$block_counter}{'right'} = $e;
+		$blocks{$block_counter}{'chr'}   = $chr;
+		$blocks{$block_counter}{'left'}  = $s;
+		$blocks{$block_counter}{'right'} = $e;
 	}
 
 	close($in);
@@ -297,3 +303,11 @@ sub read_feature_data{
 	}
 	close($in);
 }
+
+__END__
+
+tmp1 -----BBBBB---------BBBBB-----BBBBB------------------BBBBB----------
+tmp2 -----BBBBB---------BBBBB-----BBBBB------------------BBBBB----------
+
+tmp1 -----BBBBB---------BBBBB-----BBBBB------------------BBBBB----------
+tmp2 -----BBooB-------oooooBB-----ooooo------------------BBBBB--ooooo---
