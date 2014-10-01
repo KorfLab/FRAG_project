@@ -17,8 +17,8 @@ use Getopt::Long;
 #              Command-line options                  #
 ###################################################### 
 
-my ($breakpoint_gff, $feature_gff,  $help, $verbose, $mode) = (undef, undef, undef, undef, undef);
-my ($range, $bin_size, $step_size)  = (5000, 100, 25);
+my ($breakpoint_gff, $feature_gff,  $help, $verbose, $mode, $flip) = (undef, undef, undef, undef, "B", 0);
+my ($range, $bin_size, $step_size)  = (25000, 500, 50);
 
 my $usage = "$0 
 Mandatory arguments:
@@ -26,7 +26,8 @@ Mandatory arguments:
 --feature_gff <GFF file of target feature>
 
 Optional arguments:
---mode <which edge of block to look at, left, right, or both>
+--mode <which edge of block to look at, left (L), right (R), or both (B), default = $mode>
+--flip <whether to flip 'right' blocks to make results consistent for inside/outside blocks>
 --range <max distance from breakpoint, default = $range>
 --bin_size <interval to use, default = $bin_size>
 --step_size <interval to step over, default = $step_size>
@@ -41,6 +42,7 @@ GetOptions (
 	"range=i"          => \$range,
 	"bin_size=i"       => \$bin_size,
 	"step_size=i"      => \$step_size,
+	"flip"             => \$flip,
 	"help"             => \$help,
 	"mode=s"           => \$mode,
 	"verbose"          => \$verbose,
@@ -50,7 +52,7 @@ GetOptions (
 die $usage if ($help);
 die $usage if (not defined $breakpoint_gff);
 die $usage if (not defined $feature_gff);
-die $usage if (not defined $mode);
+die $usage if ($mode !~ m/^(L|R|B)$/);
 
 
 ####################################
@@ -125,31 +127,44 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 
 		# may not be able to deal with ends of some blocks if they are
 		# first or last on chromosome (or if $bin_size is really large)
-		next EDGE if ($mode =~ m/left|both/  and ($left  - abs($s) < 1));
-		next EDGE if ($mode =~ m/left|both/  and ($left  + abs($e) > $chr_sizes{$bp_chr}));
-		next EDGE if ($mode =~ m/right|both/ and ($right - abs($s) < 1));
-		next EDGE if ($mode =~ m/right|both/ and ($right + abs($e) > $chr_sizes{$bp_chr}));
+		next EDGE if ($mode =~ m/L|B/ and ($left  - abs($s) < 1));
+		next EDGE if ($mode =~ m/L|B/ and ($left  + abs($e) > $chr_sizes{$bp_chr}));
+		next EDGE if ($mode =~ m/R|B/ and ($right - abs($s) < 1));
+		next EDGE if ($mode =~ m/R|B/ and ($right + abs($e) > $chr_sizes{$bp_chr}));
 
-#		print "$edge\t$bp_chr\t$left\t$right\t";
+
+#		print "$s to $e\t$edge\t$bp_chr\t$left\t$right\t";
 		
 		# mask where breakpoint regions are in chromosome
-		if ($mode eq 'left'){
-#			print "$bp_chr\t$left\t$right\t", $left + $s, "\t", $left + $s + $bin_size, "\n";
+		if ($mode eq 'L'){
+#			print "L:",  $left  + $s, "-", $left + $s + $bin_size, "\n";
 			substr($tmp_chr_seqs_1{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
 			substr($tmp_chr_seqs_2{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
-		} elsif ($mode eq 'right') {
+		} elsif ($mode eq 'R') {
+#			print "R:",  $right  + $s, "-", $right + $s + $bin_size, "\n";
 			substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
 			substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
-#			print $right  + $s, "\t", $right + $s + $bin_size, "\t";
 		} else{
+			# we must be in 'B' mode = BOTH edges
+#			print "L:",  $left  + $s, "-", $left + $s + $bin_size, "\t";
 			substr($tmp_chr_seqs_1{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
 			substr($tmp_chr_seqs_2{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
-			substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
-			substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);		
+
+			# if we are in $flip mode, then we need to deal with the 'right' edge differently
+			# e.g. position -1,000 to -900 should be changed to be +900 to +1,000
+			# this ensures that we are consistent with looking at regions that are 
+			# either inside or outside blocks
+			if ($flip){
+#				print "R:", $right - $e, "-", $right - $e + $bin_size, "\n";
+				substr($tmp_chr_seqs_1{$bp_chr}, $right - $e, $bin_size) = ("B" x $bin_size);
+				substr($tmp_chr_seqs_2{$bp_chr}, $right - $e, $bin_size) = ("B" x $bin_size);						
+
+			} else{			
+#				print "R:", $right + $s, "-", $right + $s + $bin_size, "\n";
+				substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
+				substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);		
+			}
 		}
-		
-		
-#		print "\n";
 	}	
 	
 	# now mask features against breakpoint regions that have already been masked

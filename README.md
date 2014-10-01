@@ -831,12 +831,12 @@ Also did one more set of runs from 1,000 bp up to 250,000 bp in 1,000 increments
 ### New script ###
 
 Finally attempted what I should have done all along. A script that uses a sliding window
-around the left or right edges of 2x or 3x blocks. Have to run separately for left vs right,
-2x vs 3x, and genes vs replication origins. Can use different ranges (how far out to go
+around the left or right edges of 2x or 3x blocks. Have to run separately for left vs right
+vs both, 2x vs 3x, and genes vs replication origins. Can use different ranges (how far out to go
 either side of breakpoint), window size, and step sizes. Defaults to +- 50,000 bp (range),
 2,500 bp (window size), and 500 bp (step size). 
 
-Needs 8 runs in total for all data:
+Needs 18 runs in total for all data:
 
 	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode left > figure_2x_genes_L.tsv &
 	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode right > figure_2x_genes_R.tsv &
@@ -862,13 +862,50 @@ Needs 8 runs in total for all data:
 	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode right > figure_3x_DHS_R.tsv &
 	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode both > figure_3x_DHS_B.tsv &
 
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff --v --mode both > figure_2x_genes_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff --v --mode both > figure_3x_genes_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff state2.gff --v --mode both > figure_2x_state2_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff state2.gff --v --mode both > figure_3x_state2_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff --v --mode both > figure_2x_origins_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff --v --mode both > figure_3x_origins_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --v --mode both > figure_2x_DHS_B.tsv &
-	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff DHS.gff --v --mode both > figure_3x_DHS_B.tsv &
+
+Decided to then focus on combining data from both ends of break point and also started to 
+look at chromatin state 2 data. The problem with combining L & R sides, is that when
+my region of interest is something like -1000 to -900 bp, this is *outside* the block
+on the left edge, but *inside* the block on the right edge. 
+
+A solution is to use a new --flip option which inverts the coordinates of the right side.
+This means that we can focus on comparing regions that are inside vs outside of each 
+block edge. First test to see if this makes a difference:
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff         > figure_2x_genes_B_3000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes.gff  --flip > figure_2x_genes_B_3000_100_25_flipped.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff         > figure_3x_genes_B_3000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes.gff  --flip > figure_3x_genes_B_3000_100_25_flipped.tsv &
+
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff         > figure_2x_origins_B_25000_2000_200.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff replication_origins.gff  --flip > figure_2x_origins_B_25000_2000_200_flipped.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff         > figure_3x_origins_B_25000_2000_200.tsv &
+	./find_bias_around_breakpoints.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff replication_origins.gff  --flip > figure_3x_origins_B_25000_2000_200_flipped.tsv &
 
 
+This approach of flipping seems to work and gives a better picture of what is happening
+inside and outside duplicated and triplicated blocks. Now to set up some final runs
+using suitable ranges, bin sizes, and step factors for each particular genomic feature:
+
+
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat genes.gff --flip --range 25000 --bin 100 --step 25 > figure_2x_genes_25000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat genes.gff --flip --range 25000 --bin 100 --step 25 > figure_3x_genes_25000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat replication_origins.gff --flip --range 25000 --bin 2000 --step 200 > figure_2x_origins_25000_2000_200.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat replication_origins.gff --flip --range 25000 --bin 2000 --step 200 > figure_3x_origins_25000_2000_200.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat DHS.gff --flip --range 25000 --bin 100 --step 25 > figure_2x_DHS_25000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat DHS.gff --flip --range 25000 --bin 100 --step 25 > figure_3x_DHS_25000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat state2.gff --flip --range 25000 --bin 100 --step 25 > figure_2x_state2_25000_100_25.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat state2.gff --flip --range 25000 --bin 100 --step 25 > figure_3x_state2_25000_100_25.tsv &
+
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat genes.gff --flip  > figure_2x_genes_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat genes.gff --flip  > figure_3x_genes_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat replication_origins.gff --flip > figure_2x_origins_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat replication_origins.gff --flip  > figure_3x_origins_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat DHS.gff --flip  > figure_2x_DHS_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat DHS.gff --flip  > figure_3x_DHS_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat state2.gff --flip > figure_2x_state2_25000_500_50.tsv &
+	./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat state2.gff --flip  > figure_3x_state2_25000_500_50.tsv &
+
+
+
+Problem with my approach of 
