@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# bed2gff.pl
+# chromatin_state2gff.pl
 #
 # A script to convert simple BED file to desired GFF format
 #

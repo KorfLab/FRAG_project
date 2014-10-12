@@ -14,12 +14,13 @@ use strict;
 use warnings FATAL => 'all';
 use List::Util qw(shuffle);
 use Getopt::Long;
+use FRAG;
 
 ###################################################### 
 #              Command-line options                  #
 ###################################################### 
 
-my ($breakpoint_gff, $feature_gff, $bp, $help, $verbose) = (undef, undef, 1000, undef, undef);
+my ($breakpoint_gff, $feature_gff, $bp, $help, $verbose) = (undef, undef, 100, undef, undef);
 
 my $usage = "$0 
 Mandatory arguments:
@@ -51,19 +52,21 @@ die $usage if (not defined $feature_gff);
 # Set up chromosome data
 ####################################
 
-# Need a hash to store sizes of chromosomes 
-my %chr_sizes;
-$chr_sizes{'Chr1'} = 30427671;
-$chr_sizes{'Chr1'} = 28315915; # a fudge to deal with tail swap, coordinate from Han
-$chr_sizes{'Chr2'} = 19698289;
-$chr_sizes{'Chr3'} = 23459830;
-$chr_sizes{'Chr4'} = 18585056;
-$chr_sizes{'Chr5'} = 26975502;
+# Use a hash to store sizes of chromosomes 
+# keys will be 'chr1', 'chr2' etc.
+# want the shorter 'tailswap' length for Chr1
+my %chr_sizes = FRAG::get_chromosome_lengths('tailswap'); 
 
 # where does the tail swap begin on Chr4?
-my $pre_tailswap_length = 16541500; # coordinate from Han
+my $pre_tailswap_length = FRAG::get_chr4_pre_tailswap_length();
 
 
+# get details of breakpoints coordinates
+my %breakpoints = FRAG::read_breakpoint_data($breakpoint_gff);
+
+
+# get list of all target GFF features we are interested in
+my @target_gff_features = sort (FRAG::get_list_of_GFF_features($feature_gff));
 
 ####################################
 #
@@ -71,66 +74,74 @@ my $pre_tailswap_length = 16541500; # coordinate from Han
 #
 ####################################
 
+open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
 
-#my @gff_features = qw(gene DNA_replication_origin DNAseI_hypersensitive_site);
-my @gff_features = qw(gene DNA_replication_origin);
-foreach my $gff_feature (@gff_features){
+# hash to keep track of which breakpoints overlap which features
+my %breakpoints_containing_features;
+	
 
-	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
+BREAKPOINT: foreach my $breakpoint (sort {$a <=> $b} keys %breakpoints){
+	print "Breakpoint: $breakpoint\n" if ($verbose);
+	my $chrA = $breakpoints{$breakpoint}{chr};
+	my $qs   = $breakpoints{$breakpoint}{pos};
+	my $qe   = $breakpoints{$breakpoint}{pos};
 
-	my $breakpoint_count = 0;
-	my $breakpoints_containing_features = 0;
-		
-	OUTER: while(my $breakpoint_data = <$in>){
-		my ($chrA, undef, $featureA, $qs, $qe, undef, undef, undef, $comment) = split(/\t/, $breakpoint_data);	
+
+	# now loop over feature GFF file
+	open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
+
+	OUTER: while(my $gff_line = <$in>){
+		my ($chrB, undef, $feature, $ss, $se, undef, undef, undef, $comment) = split(/\t/, $gff_line);	
 
 		# skip comments
-		next if ($breakpoint_data =~ m/^#/);
+		next if ($gff_line =~ m/^#/);
 
-		# want chromosome breakpoints, but ignore any which are effectively the ends of
-		# the chromosomes
-		next unless ($featureA eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
-		
-		$breakpoint_count++;
+		# only look at features on same chromosome as current breakpoint
+		next unless ($chrB eq $chrA);
 
-		# now main GFF file
-		open (my $in2, "<", $feature_gff) or die "Can't read $feature_gff\n";
+		# skip tailswap regions of Chr1 and Chr4
+		next if ($chrB eq 'Chr1' and $ss > $chr_sizes{'Chr1'});
+		next if ($chrB eq 'Chr4' and $se < $pre_tailswap_length);
 
-		while(my $gff_line = <$in2>){
-			my ($chrB, undef, $featureB, $ss, $se, undef, undef, undef, undef) = split(/\t/, $gff_line);	
 
-			# skip comments
-			next if ($gff_line =~ m/^#/);
-
-			# only want to look at one feature at a time
-			next unless $featureB eq $gff_feature;
-
-			# only look at features on same chromosome as current breakpoint
-			next unless ($chrB eq $chrA);
-
-			# skip tailswap regions of Chr1 and Chr4
-			next if ($chrB eq 'Chr1' and $ss > $chr_sizes{'Chr1'});
-			next if ($chrB eq 'Chr4' and $se < $pre_tailswap_length);
-
-			# can now ask where current GFF feature overlaps current breakpoint
-			my $overlap = check_for_overlap($qs,$qe,$ss,$se);
-			if ($overlap){
-				$breakpoints_containing_features++;
-				print "\tProcessed $breakpoint_count breakpoints, found $breakpoints_containing_features overlap with $gff_feature\n" if ($verbose);
-				next OUTER;
-			}
-	
+		#  want to separate out chromatin state data (if it exists)
+		if($feature eq 'open_chromatin_state'){
+			my ($state) = $comment =~ m/Note=\"state(\d+)\"/;
+			$feature = "open_chromatin_state_${state}";
 		}
-		close($in2);
 
-		print "\tProcessed $breakpoint_count breakpoints, found $breakpoints_containing_features overlap with $gff_feature\n" if ($verbose);
 
+		# only want to look features on our list
+		next unless ($feature ~~ @target_gff_features);
+
+		# can now ask where current GFF feature overlaps current breakpoint
+		my $overlap = check_for_overlap($qs, $qe, $ss, $se);
+		if ($overlap){
+
+			# flag that for this combination of feature and breakpoint we have see an overlap
+			$breakpoints_containing_features{$feature}{$breakpoint}++;
+
+			my $overlap_count = keys (%{$breakpoints_containing_features{$feature}});
+			print "\t$feature: $overlap_count breakpoints overlap\n" if ($verbose and $breakpoints_containing_features{$feature}{$breakpoint} <2);
+			# once we know a breakpoint overlaps at least
+		}
 	}
-	my $percent = sprintf("%.1f", ($breakpoints_containing_features / $breakpoint_count) * 100);
-	print "FINAL: Processed $breakpoint_count breakpoint regions, found $breakpoints_containing_features ($percent%) overlap with $gff_feature\n";
-
-	close($in);
 }
+
+close($in);
+
+my $number_of_breakpoints = keys %breakpoints;
+
+foreach my $feature (@target_gff_features){
+	my ($overlap_count, $percent) = (0, 0.00);
+
+	$overlap_count = keys (%{$breakpoints_containing_features{$feature}});
+	$percent = sprintf("%.1f", ($overlap_count / $number_of_breakpoints) * 100);
+
+	print "FINAL: $overlap_count/$number_of_breakpoints breakpoint regions ($percent%) overlap with $feature\n";
+
+}
+
 
 exit;
 

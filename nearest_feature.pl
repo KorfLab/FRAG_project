@@ -15,16 +15,17 @@ use strict;
 use warnings FATAL => 'all';
 use List::Util qw(shuffle sum);
 use Getopt::Long;
+use FRAG;
 
 ###################################################### 
 #              Command-line options                  #
 ###################################################### 
 
-my ($junction_gff, $feature_gff, $help, $verbose) = (undef, undef, undef, undef);
+my ($breakpoint_gff, $feature_gff, $help, $verbose) = (undef, undef, undef, undef);
 
 my $usage = "$0 
 Mandatory arguments:
---junction_gff <gff file of breakpoint junction coordinates> 
+--breakpoint_gff <gff file of breakpoint coordinates> 
 --feature_gff <master GFF file of all TAIR10 features>
 
 Optional arguments:
@@ -34,15 +35,15 @@ Optional arguments:
 ";
 
 GetOptions (
-	"junction_gff=s" => \$junction_gff,
-	"feature_gff=s"  => \$feature_gff,
-	"help"           => \$help,
-	"verbose"        => \$verbose,
+	"breakpoint_gff=s" => \$breakpoint_gff,
+	"feature_gff=s"    => \$feature_gff,
+	"help"             => \$help,
+	"verbose"          => \$verbose,
 );
 
 
 die $usage if ($help);
-die $usage if (not defined $junction_gff);
+die $usage if (not defined $breakpoint_gff);
 die $usage if (not defined $feature_gff);
 
 
@@ -50,27 +51,16 @@ die $usage if (not defined $feature_gff);
 # Set up chromosome data
 ####################################
 
-# Need a hash to store sizes of chromosomes 
-my %chr_sizes;
-$chr_sizes{'Chr1'} = 30427671;
-$chr_sizes{'Chr1'} = 28315915; # a fudge to deal with tail swap, coordinate from Han
-$chr_sizes{'Chr2'} = 19698289;
-$chr_sizes{'Chr3'} = 23459830;
-$chr_sizes{'Chr4'} = 18585056;
-$chr_sizes{'Chr5'} = 26975502;
+# Use a hash to store sizes of chromosomes 
+# keys will be 'chr1', 'chr2' etc.
+# want the shorter 'tailswap' length for Chr1
+my %chr_sizes = FRAG::get_chromosome_lengths('tailswap'); 
 
 # where does the tail swap begin on Chr4?
-my $pre_tailswap_length = 16541500; # coordinate from Han
+my $pre_tailswap_length = FRAG::get_chr4_pre_tailswap_length();
 
-
-
-
-# first store details of breakpoints
-my %breakpoints;
-
-read_junction_data();
-
-
+# get details of breakpoints coordinates
+my %breakpoints = FRAG::read_breakpoint_data($breakpoint_gff);
 
 
 
@@ -83,12 +73,8 @@ read_junction_data();
 # main loop to loop over all features in main GFF file and calculate distance to nearest
 # breakpoint for each genomic feature
 
-
-
 # hash to track counts of each type of genomic feature
 my %feature_count;
-
-my @features = qw(CDS DNA_replication_origin exon five_prime_UTR gene mRNA miRNA ncRNA protein pseudogene pseudogenic_exon pseudogenic_transcript satellite snoRNA tRNA three_prime_UTR transposable_element transposable_element_gene transposon_fragment);
 
 open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
 
@@ -102,9 +88,6 @@ while(my $line = <$in>){
 	next if ($chr eq 'Chr1' and $s > $chr_sizes{'Chr1'});
 	next if ($chr eq 'Chr4' and $s < $pre_tailswap_length);
 
-	# only want to consider features on our list
-	next unless $feature ~~ @features;
-
 	# want to separate protein-coding gene features from non-protein coding gne
 	if($feature eq 'gene'){
 		if ($comment =~ m/protein_coding_gene/){
@@ -114,6 +97,12 @@ while(my $line = <$in>){
 		}
 	}
 	
+
+	# likewise, want to separate out chromatin state data (if it exists)
+	if($feature eq 'open_chromatin_state'){
+		my ($state) = $comment =~ m/Note=\"state(\d+)\"/;
+		$feature = "open_chromatin_state_${state}";		
+	}
 	
 	# keep track of how many of each feature type we see
 	$feature_count{$feature}++;
@@ -188,60 +177,11 @@ foreach my $feature (keys %stats){
 }
 
 print "Feature\tAverage_distance_to_nearest_breakpoint\tStandard_deviation\tNumber_of_features\n";
-foreach my $feature (sort {$mean_distance{$a} <=> $mean_distance{$b}} keys %mean_distance){
+#foreach my $feature (sort {$mean_distance{$a} <=> $mean_distance{$b}} keys %mean_distance){
+foreach my $feature (sort keys %mean_distance){
+
 	print "$feature\t$mean_distance{$feature}\t$standard_deviation{$feature}\t$feature_count{$feature}\n";
 }
 
 
-
 exit;
-
-
-####################################
-#
-#  S U B R O U T I N E S
-#
-####################################
-
-
-###############################################################
-# read junction coordinates and represent in virtual sequences
-###############################################################
-
-sub read_junction_data{
-
-	# only want to process some of the data in this file
-	# need to extract chromosome_breakpoint features:
-	
-	# Chr1	t_test.pl	copy_number_gain	1	205575	.	+	.	ID=block0001;Name=01a1_01a2;Note="duplicated block"
-	# Chr1	PRICE	chromosome_breakpoint	1	1	.	.	.	ID=breakpoint0001;Parent=block0001;Name=01a1;Note="telomeric end"
-	# Chr1	PRICE	chromosome_breakpoint	205575	205575	.	-	.	ID=breakpoint0002;Parent=block0001;Name=01a2;Note="paired with breakpoint0033"
-	# Chr1	t_test.pl	copy_number_gain	31632	87466	.	+	.	ID=block0002;Name=01b1_01b2;Note="triplicated block"
-	# Chr1	PRICE	chromosome_breakpoint	31632	31632	.	-	.	ID=breakpoint0003;Parent=block0002;Name=01b1;Note="paired with breakpoint0087"
-
-	open (my $in, "<", $junction_gff) or die "Can't read $junction_gff\n";
-
-	my $breakpoint_count = 0;
-
-	while(my $line = <$in>){
-	
-		# skip comments
-		next if ($line =~ m/^#/);
-		
-		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
-		
-		# want chromosome breakpoints, but ignore any which are effectively the ends of
-		# the chromosomes
-		next unless ($feature eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
-		
-		$breakpoint_count++;
-	
-		# store details
-		$breakpoints{$breakpoint_count}{chr} = $chr;
-		$breakpoints{$breakpoint_count}{pos} = $s;
-	}
-	close($in);
-}
-
-
-

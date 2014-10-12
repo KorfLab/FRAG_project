@@ -1,58 +1,126 @@
 FRAG_project
 ============
 
+# Overview
+
 To contain code and data files for the Fragmentation project, investigating shattered 
-chromosome phenotypes in _Arabidopsis thaliana_.
+chromosome phenotypes in _Arabidopsis thaliana_. The main focus of this repository
+is to develop code to help determine breakpoints between duplicated and triplicated
+regions of chromosomes (see 'Block_detection_code/' directory) and also to see whether
+certain genomic features are over- or under-represented at either the breakpoint regions
+or in the blocks themselves.
 	
+
+# Generating Data: Making Master GFF file of all genomic features #
+
+## 1) Get GFF features from TAIR ##
+
+TAIR has separate GFF files for various features on their FTP site (not all in one 
+master file). So:
+
+	cat TAIR10_GFF3_genes_transposons.gff TAIR_GFF3_ssrs.gff > all_TAIR10_features.gff
+
 	
-## Background
-
-Raw data from Han's mapping of reads back to reference genome is in the file:
-
-	CGRs_1kb_plots_forkeith.tsv
-
-This file contains raw and normalized counts of reads mapped to 1 Kbp bins in three lines 
-(FRAG62, FRAG133, and FRAG80 - a control line). The normalized counts don't just use 
-FRAG80 but are based on a concatenated file of all the F1 diploids that were sequenced. 
-Han calls this the 'SuperF1diploid'.
-
-The normalized counts come out to approximately 2.0 for duplications, and 3.0 for 
-triplications. Actual values are slightly lower than this.
 
 
+## 2) Making replication origin GFF file ##
 
-### Making Master GFF file of all genomic features
+I wrote a simple script `ori2gff.pl` that takes the raw data from the Gutierrez et al.
+paper and converts it to a GFF format. E.g. 	
 
-TAIR has separate GFF files for various features on their FTP (not all in one master file).
-So:
+	./ori2gff.pl Gutierrez.txt > Gutierrez_DNA_replication_origin_TAIR10_GBROWSE.gff
+	
+This file will be appended to the main TAIR10 GFF file of all genomic features.
 
-	cat TAIR10_GFF3_genes_transposons.gff TAIR_GFF3_ssrs.gff Gutierrez_DNA_replication_origin_TAIR10_GBROWSE.gff > all_TAIR10_features.gff
+	cat Gutierrez_DNA_replication_origin_TAIR10_GBROWSE.gff  >> all_TAIR10_features.gff
+
+
+
+
+## 3) Making DNAse I hypersensitive site GFF file ##
+
+This paper by Zhang et al. (2012) describes a set of hypersensitive sites in A. thaliana:
+
+[Genome-Wide Identification of Regulatory DNA Elements and Protein-Binding Footprints 
+Using Signatures of Open Chromatin in Arabidopsis](http://www.plantcell.org/content/24/7/2719.full)
+
+In this paper, they generate DHS maps for seed and flower tissues. These data were 
+submitted to the GEO database and are available under accession 
+[GSE34318](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE34318). One of the data 
+files in in BED format (GSE34318_dhsites_region.bed) and this includes the location of 
+DHS regions (presumably after some threshold value has been exceeded) for both leaf and 
+seed tissues.
+
+I extracted just the DHS regions that were identified in wildtype leaf libraries, and 
+converted to GFF.
+
+First quick replacement of spaces with tabs in downloaded bed file and then convert to 
+desired GFF format with simple Perl script:
+
+	tr ' ' '\t' < GSE34318_dhsites_region.bed  | grep wtleaf | sort -k 1,1 -k 2n,2n  > GSE34318_dhsites_region_sorted.bed
+	./bed2gff.pl GSE34318_dhsites_region_sorted.bed  > DHS.gff
+	
+Now combine with main file:
+
+	cat DHS.gff >> all_TAIR10_features.gff
+	grep -vE "^#" all_TAIR10_features.gff | sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
+
+
+
+
+### 4) Making Chromatin state information GFF file ###
+
+This new paper by Sequeira-Mendes et al. (2014) describes a set of distinct chromatin 
+states in *A. thaliana*: 
+
+[The Functional Topography of the Arabidopsis Genome Is Organized in a Reduced Number of 
+Linear Motifs of Chromatin States](http://www.plantcell.org/content/early/2014/06/11/tpc.114.124578.long)
+
+They mostly use existing histone and other epigenetic modification data, but have some of
+their own. Using principal components analysis, they end up defining 9 different states
+of chromatin. These are available in supplemental data file 2 (Excel spreadsheet).
+
+I converted this to a GFF file. Sequence Ontology only has one term for chromatin
+(SO:0001747 open_chromatin_state) so I will use the 9th column of GFF to distinguish the
+9 different states.
+
+First export each tab in Excel spreadsheet to a text file (Windows formatted text), e.g
+state1.txt, state2.txt etc. Then simple Perl script to convert them to GFF.
+
+	./chromatin_state2gff.pl > tmp.gff
+	cat tmp.gff >> all_TAIR10_features.gff
+	sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
+
+
+## Summary of TAIR10 GFF data ##
 
 How many unique features do we have?
 
 	cut -f 2,3 all_TAIR10_features.gff | sort -u
-	GutierrezLab	DNA_replication_origin
-	TAIR10	CDS
-	TAIR10	chromosome
-	TAIR10	exon
-	TAIR10	five_prime_UTR
-	TAIR10	gene
-	TAIR10	mRNA
-	TAIR10	miRNA
-	TAIR10	ncRNA
-	TAIR10	protein
-	TAIR10	pseudogene
-	TAIR10	pseudogenic_exon
-	TAIR10	pseudogenic_transcript
-	TAIR10	rRNA
-	TAIR10	snRNA
-	TAIR10	snoRNA
-	TAIR10	tRNA
-	TAIR10	three_prime_UTR
-	TAIR10	transposable_element
-	TAIR10	transposable_element_gene
-	TAIR10	transposon_fragment
-	TandemRepeatsFinder_v4.04	satellite
+	GEO     DNAseI_hypersensitive_site
+	GutierrezLab    DNA_replication_origin
+	Sequeira-Mendes_2014_paper      open_chromatin_state
+	TAIR10  CDS
+	TAIR10  chromosome
+	TAIR10  exon
+	TAIR10  five_prime_UTR
+	TAIR10  gene
+	TAIR10  miRNA
+	TAIR10  mRNA
+	TAIR10  ncRNA
+	TAIR10  protein
+	TAIR10  pseudogene
+	TAIR10  pseudogenic_exon
+	TAIR10  pseudogenic_transcript
+	TAIR10  rRNA
+	TAIR10  snoRNA
+	TAIR10  snRNA
+	TAIR10  three_prime_UTR
+	TAIR10  transposable_element
+	TAIR10  transposable_element_gene
+	TAIR10  transposon_fragment
+	TAIR10  tRNA
+	TandemRepeatsFinder_v4.04       satellite
 
 Can reorder master GFF file to sort by chromosome and then coordinate:
 
@@ -60,20 +128,26 @@ Can reorder master GFF file to sort by chromosome and then coordinate:
 
 
 
-### New nomenclature and data formats needed ###
 
-Decided to work on reorganizing our data to make it easier going forward. To clarify, we
-have contigs/blocks representing duplicated (or triplicated regions). We can represent
-them using the Sequence Ontology term 'copy_number_gain' (SO:0001742):
+# Generating a GFf file to represent experimental data
+
+
+
+## Nomenclature and GFF data formats used to represent breakpoint/block data ##
+
+To summarize, we have regions of the genome that have been identified as representing 
+duplicated (or triplicated) 'blocks'. We can represent these regions by using the Sequence 
+Ontology term 'copy_number_gain' (SO:0001742):
 
 http://www.sequenceontology.org/browser/current_svn/term/SO:0001742
 
-Each block has two ends which define breakpoints. These can be represented with the
+Each duplicated or triplicated block Ñ henceforth referred to as either 2x or 3x for
+simplicity ÑÊhas two ends which define breakpoints. These can be represented with the
 Sequence Ontology term 'chromosome_breakpoint' (SO:0001021):
 
 http://www.sequenceontology.org/browser/current_svn/term/SO:0001021 
 
-Each breakpoint has a connected breakpoint (the end of another duplicated block). In most
+Each breakpoint has a connected breakpoint (the end of another 2x/3x block). In most
 cases these pairs of breakpoints will contain intervening sequence that is not present
 in the reference. Collectively, a pair of breakpoints (and inserted sequence) defines a 
 junction. These could potentially also be represented in Sequence Ontology terms with
@@ -81,17 +155,21 @@ junction. These could potentially also be represented in Sequence Ontology terms
 
 http://www.sequenceontology.org/browser/current_svn/term/SO:0000366
 
-We now need anonymous (and unique) identifiers for blocks, breakpoints and junctions. 
-E.g. block0001, breakpoint0001 etc. Each block (copy_number_gain) should connect to two
-breakpoint objects, and each breakpoint should have a parent block ID, and a paired 
-breakpoint ID. Both blocks and breakpoints will be stored in a single GFF file. 
+Finally, there are also the regions of the genome that punctuate 2x and 3x blocks and which
+can be thought of as unduplicated regions, or '1x' blocks. These can be represented with
+the Sequence Ontology term 'region' (SO:0000001):
 
-Junctions will point to the flanking breakpoint IDs but will probably not be stored in a 
-GFF file (we could list the pair of insertion sites...which will be the same 
-coordinates as the breakpoints, but it gets confusing when we are dealing with sequences
-that differ from the reference genome). We'll use a spreadsheet instead so that we can 
-store the sequence that occurs in junction regions.
+http://www.sequenceontology.org/browser/current_svn/term/SO:0000001
 
+
+## Making a new GFF file ##
+
+We now need anonymous (and unique) identifiers for blocks and breakpoints. E.g. block0001, 
+breakpoint0001 etc. Each block (copy_number_gain) should connect to two breakpoint objects, 
+and each breakpoint should have a parent block ID, and a paired breakpoint ID. Both blocks 
+and breakpoints will be stored in a single GFF file. 
+
+Example GFF file:
 
 	##gff-version 3
 	##species http://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&id=3702
@@ -103,34 +181,43 @@ store the sequence that occurs in junction regions.
 	Chr1	PRICE	chromosome_breakpoint	205575	205575	.	-	.	ID=breakpoint0002;Parent=block0001;Name=01a2;Note="paired with breakpoint0033"
 	Chr1	t_test.pl	copy_number_gain	31632	87466	.	+	.	ID=block0002;Name=01b1_01b2;Note="triplicated block"
 	Chr1	PRICE	chromosome_breakpoint	31632	31632	.	-	.	ID=breakpoint0003;Parent=block0002;Name=01b1;Note="paired with breakpoint0087"
+	Chr1    .       region  205575  458539  .       +       .       ID=block0091;Note="no copy number gain detected"
+
+
+
+## Treating FRAG00062 data by copy-number level ##
+
+For FRAG00062 we can also separate out the breakpoint data into two subsets, those 
+breakpoints that flank either 2x or 3x blocks:
+
+	grep duplicated FRAG00062.gff   | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > duplicated_blocks.txt
+	grep triplicated FRAG00062.gff  | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > triplicated_blocks.txt
+	grep -f duplicated_blocks.txt FRAG00062.gff > FRAG00062_2x.gff
+	grep -f triplicated_blocks.txt FRAG00062.gff > FRAG00062_3x.gff
 
 
 
 
-### Checking gene orientation ###
+
+
+
+
+# Analysis: part 1
+
+
+
+### Checking feature orientation ###
 
 At this point we realized that we would like to know whether the enrichment of genes 
 inside junction regions followed any pattern. I.e. are there more likely to be convergently
 transcribed genes (hence more 3' UTRs) than divergently or tandemly transcribed genes.
 
 I put only gene features from all_TAIR10_feature.gff into a new file (genes.gff) and made
-a new script to test this:
+a new script to test this. Running this script with newer breakpoint data for FRAG00062 
+(90 breakpoints, excluding the 2 that meet telomeres):
 
-	./check_gene_orientation.pl --breakpoint_gff FRAG00062.gff --feature_gff genes.gff --target gene
-	
-This revealed that across the entire genome, (protein-coding) gene orientation is 
-effectively random (as expected):
+	./check_feature_orientation.pl --breakpoint_gff GFF_files/FRAG00062.gff --feature_gff GFF_files/genes.gff --target gene
 
-	>>      6987    %25.82
-	<>      6508    %24.05
-	<<      7058    %26.08
-	><      6508    %24.05
-
-Running this script with newer breakpoint data for FRAG00062 (now with 90 breakpoints):
-
-	./check_gene_orientation.pl --breakpoint_gff FRAG00062.gff --feature_gff genes.gff --target gene
-
-	60130895 coding bp in genome out of 119146348 bp (50.47%)
 	>>>|>>>	25	%27.78
 	<<<|<<<	31	%34.44
 	>>>---|---<<<	4	%4.44
@@ -143,9 +230,8 @@ divergently transcribed genes account for 41% of all intergenic breakpoints (14/
 
 And for FRAG00045 (30 breakpoints):
 
-	./check_gene_orientation.pl --breakpoint_gff FRAG00045.gff --feature_gff genes.gff --target gene
+	./check_feature_orientation.pl --breakpoint_gff FRAG00045.gff --feature_gff genes.gff --target gene
 
-	60130895 coding bp in genome out of 119146348 bp (50.47%)
 	>>>|>>>	12	%40.00
 	<<<|<<<	5	%16.67
 	>>>---|---<<<	3	%10.00
@@ -159,39 +245,59 @@ breakpoints are between divergently transcribed genes. So no strong pattern.
 
 
 
-## Data on nearest feature to each breakpoint ##
 
-Using new GFF file, I wrote a script to calculate the average distance of any genomic feature
-to each breakpoint. I.e. for every breakpoint find nearest gene/UTR/satellite etc. Then 
-average nearest distances across all breakpoints. 
+### Data on nearest feature to each breakpoint ###
 
-	./nearest_feature.pl --junction_gff FRAG00062.gff --feature_gff all_TAIR10_features.gff
+I wrote a script to calculate the average distance of any genomic feature to each 
+breakpoint. I.e. for every breakpoint find nearest gene/UTR/satellite etc. Then averaged
+the nearest distances across all breakpoints. 
 
-	Feature	Average_distance_to_nearest_breakpoint	Standard_deviation	Number_of_features
-	satellite	380	478	73112
-	exon	604	1193	57589
-	CDS	911	2246	53113
-	mRNA	952	1214	9953
-	protein	1195	2215	9271
-	protein_coding_gene	1218	2195	7092
-	three_prime_UTR	2104	2796	8185
-	five_prime_UTR	2356	3058	9224
-	transposable_element	6257	8084	7107
-	transposon_fragment	6257	8084	7858
-	non_protein_coding_gene	44014	33069	432
-	DNA_replication_origin	44476	58616	376
-	ncRNA	108457	98168	149
-	pseudogene	136192	279742	233
-	pseudogenic_exon	136192	279742	327
-	pseudogenic_transcript	136192	279742	233
-	transposable_element_gene	142647	166882	681
-	tRNA	157066	153789	236
-	miRNA	254926	247939	49
-	snoRNA	2082570	2450550	22
+	./nearest_feature.pl --breakpoint_gff GFF_files/FRAG00062.gff --feature_gff GFF_files/all_TAIR10_features.gff
+
+	Feature Average_distance_to_nearest_breakpoint  Standard_deviation      Number_of_features
+	CDS     879     2251    53113
+	DNA_replication_origin  44837   59143   376
+	DNAseI_hypersensitive_site      1507    2403    10187
+	chromosome      7407070 3791549 1
+	exon    567     1162    57589
+	five_prime_UTR  2325    3085    9224
+	mRNA    922     1194    9953
+	miRNA   257654  248174  49
+	ncRNA   108994  98485   149
+	non_protein_coding_gene 44618   33137   432
+	open_chromatin_state_1  3126    3856    3155
+	open_chromatin_state_2  2581    3245    3833
+	open_chromatin_state_3  3749    4999    3056
+	open_chromatin_state_4  2834    3494    4050
+	open_chromatin_state_5  9277    11084   1897
+	open_chromatin_state_6  5153    6944    2303
+	open_chromatin_state_7  12548   15714   1248
+	open_chromatin_state_8  27134   31662   1275
+	open_chromatin_state_9  343955  388532  468
+	protein 1169    2223    9271
+	protein_coding_gene     1194    2205    7092
+	pseudogene      116394  230257  233
+	pseudogenic_exon        116394  230257  327
+	pseudogenic_transcript  116394  230257  233
+	satellite       384     482     73112
+	snRNA   4342430 2745429 2
+	snoRNA  2116014 2467006 22
+	tRNA    158832  154954  236
+	three_prime_UTR 2039    2791    8185
+	transposable_element    6236    8143    7107
+	transposable_element_gene       131352  146540  681
+	transposon_fragment     6236    8143    7858
 
 Results are probably biased towards higher density of certain features. I.e. breakpoints
 are most likely to be nearest a satellite feature, but there are more satellite features
 than anything else.
+
+
+
+
+
+
+# Analysis: part 2
 
 
 
@@ -205,76 +311,92 @@ overlapping other breakpoints) and ask whether the total bp of a feature such as
 exons' is higher (as a percentage) *inside* those regions vs all DNA *outside* those
 regions.
 
-Can try this for many different sizes of breakpoint (100 bp up to 50 Kbp). In this analysis
-certain GFF features (chromosome, rRNA, snRNA) are ignored.
+Can try this for many different sizes of breakpoint region (100 bp up to 50 Kbp). In 
+this analysis certain GFF features (e.g. chromosome) are ignored. The final result is 
+calculated as a ratio of %breakpoint-region-occupied-by-feature compared to
+%non-breakpoint-region-occupied-by-feature. E.g.
 
-The final result is calculated as a ratio of %breakpoint-region-occupied-by-feature compared
-to %non-breakpoint-region-occupied-by-feature. To assess the significance of these ratios,
-I perform shuffling experiments to see whether we see similar ratios when we randomize the 
-location of all of the breakpoints (for the tailswap region we allow the possibility of 
-all junctions  occurring in Chr1, or Chr4, or any combination of both).
+ ./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062.gff  --feature_gff GFF_files/all_TAIR10_features.gff --bp 100
 
+	Run     Real_ratio      Bp      Feature Breakpoint_region_bp    Non_breakpoint_region_bp        Feature_bp_inside       %Inside Feature_bp_outside      %Outside        Shuffled_ratio  Above   Same    Below
+	0       1.1372  100     CDS     8957    30350564        2978    33.25   8873356 29.24   1.1372  0       0       0
+	0       0.9589  100     DNA_replication_origin  8957    30350564        300     3.35    1060090 3.49    0.9589  0       0       0
+	0       1.4907  100     DNAseI_hypersensitive_site      8957    30350564        1749    19.53   3975577 13.10   1.4907  0       0       0
+	0       1.1628  100     exon    8957    30350564        4324    48.28   12600559        41.52   1.1628  0       0       0
+	0       1.4412  100     five_prime_UTR  8957    30350564        361     4.03    848766  2.80    1.4412  0       0       0
+	0       1.1497  100     gene    8957    30350564        5428    60.60   15998341        52.71   1.1497  0       0       0
+	0       1.0995  100     mRNA    8957    30350564        5702    63.66   17572723        57.90   1.0995  0       0       0
+	0       0.0000  100     miRNA   8957    30350564        0       0.00    9336    0.03    0.0000  0       0       0
+	0       0.0000  100     ncRNA   8957    30350564        0       0.00    183696  0.61    0.0000  0       0       0
+	0       1.2536  100     open_chromatin_state_1  8957    30350564        1275    14.23   3446325 11.36   1.2536  0       0       0
+	0       2.0929  100     open_chromatin_state_2  8957    30350564        1910    21.32   3092404 10.19   2.0929  0       0       0
+	0       1.1439  100     open_chromatin_state_3  8957    30350564        1053    11.76   3119097 10.28   1.1439  0       0       0
+	0       0.9309  100     open_chromatin_state_4  8957    30350564        1309    14.61   4764641 15.70   0.9309  0       0       0
+	0       0.6904  100     open_chromatin_state_5  8957    30350564        900     10.05   4417500 14.55   0.6904  0       0       0
+	0       0.9582  100     open_chromatin_state_6  8957    30350564        935     10.44   3306415 10.89   0.9582  0       0       0
+	0       0.7249  100     open_chromatin_state_7  8957    30350564        669     7.47    3127281 10.30   0.7249  0       0       0
+	0       0.9969  100     open_chromatin_state_8  8957    30350564        706     7.88    2399744 7.91    0.9969  0       0       0
+	0       0.1266  100     open_chromatin_state_9  8957    30350564        100     1.12    2677100 8.82    0.1266  0       0       0
+	0       1.0635  100     protein 8957    30350564        4267    47.64   13595512        44.79   1.0635  0       0       0
+	0       0.0000  100     pseudogene      8957    30350564        0       0.00    225503  0.74    0.0000  0       0       0
+	0       0.0000  100     pseudogenic_exon        8957    30350564        0       0.00    207487  0.68    0.0000  0       0       0
+	0       0.0000  100     pseudogenic_transcript  8957    30350564        0       0.00    225503  0.74    0.0000  0       0       0
+	0       0.7886  100     satellite       8957    30350564        443     4.95    1903479 6.27    0.7886  0       0       0
+	0       0.0000  100     snRNA   8957    30350564        0       0.00    337     0.00    0.0000  0       0       0
+	0       0.0000  100     snoRNA  8957    30350564        0       0.00    2174    0.01    0.0000  0       0       0
+	0       5.7529  100     tRNA    8957    30350564        26      0.29    15314   0.05    5.7529  0       0       0
+	0       1.8473  100     three_prime_UTR 8957    30350564        718     8.02    1317026 4.34    1.8473  0       0       0
+	0       0.5152  100     transposable_element    8957    30350564        771     8.61    5070474 16.71   0.5152  0       0       0
+	0       0.5986  100     transposable_element_gene       8957    30350564        300     3.35    1698110 5.59    0.5986  0       0       0
+	0       0.4601  100     transposon_fragment     8957    30350564        671     7.49    4941706 16.28   0.4601  0       0       0
 
-#### FRAG00062 ####
-
-For this dataset we can also separate out the breakpoint data into two subsets,
-those breakpoints that flank either 2x or 3x blocks:
-
-	grep duplicated FRAG00062.gff   | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > duplicated_blocks.txt
-	grep triplicated FRAG00062.gff  | sed 's/.*ID=\(block[0-9]*\);N.*/\1/' > triplicated_blocks.txt
-	grep -f duplicated_blocks.txt FRAG00062.gff > FRAG00062_2x.gff
-	grep -f triplicated_blocks.txt FRAG00062.gff > FRAG00062_3x.gff
-
-<<<<<<< HEAD
-### Try to look for overlap between breakpoint regions and DNase I hypersensitive sites (DHS) ###
-
-This paper by Zhang et al. (2012) describes a set of hypersensitive sites in A. thaliana:
-
-[Genome-Wide Identification of Regulatory DNA Elements and Protein-Binding Footprints 
-Using Signatures of Open Chromatin in Arabidopsis](http://www.plantcell.org/content/24/7/2719.full)
-
-In this paper, they generate DHS maps for seed and flower tissues. These data were submitted
-to the GEO database and are available under accession [GSE34318](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE34318).
-One of the data files in in BED format (GSE34318_dhsites_region.bed) and this includes the 
-location of DHS regions (presumably after some threshold value has been exceeded) for both 
-leaf and seed tissues.
-
-I extracted just the DHS regions that were identified in wildtype leaf libraries, and 
-converted to GFF.
-
-First quick replacement of spaces with tabs in downloaded bed file and then convert to 
-desired GFF format with simple Perl script:
-
-	tr ' ' '\t' < GSE34318_dhsites_region.bed  | grep wtleaf| sort -k 1,1 -k 2n,2n   > GSE34318_dhsites_region_sorted.bed
-	./bed2gff.pl GSE34318_dhsites_region_sorted.bed  > DHS.gff
-
-
-
-
-=======
-This means that each 'run' of  analysis for any given size of breakpoint region, occurs 
-3 times:
-
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062.gff    --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_breakpoints_s1000_L10000.tsv
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_2x_breakpoints_s1000_L10000.tsv
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_3x_breakpoints_s1000_L10000.tsv
-
-Note that only the first row of the output file (row 0) contains data from the unshuffled
-results. All other results rows reflect shuffled data. The full set of columns of output are:
+The first set of columns of output are as follows:
 
 1. Run number (starts at 0 for unshuffled results)
 2. Real ratio from unshuffled data (the ratio of columns 6 & 7)
-3. Feature Breakpoint_region_bp    
-4. Non_breakpoint_region_bp        
-5. Feature_bp_inside      
-6. %Inside 
-7. Feature_bp_outside      
-8. %Outside        
-8. Shuffled_ratio  
-9. Above (number of times column 8 exceeds column 2)
-10. Same (number of times column 8 equals column 2)   
-11. Below (number of times column 8 is below column 2)
+3. bp of individual breakpoint regions
+4. Feature 
+5. Breakpoint_region_bp (for small values of bp, this equals number of breakpoints * bp)
+6. Non_breakpoint_region_bp      
+7. Feature_bp_inside      
+8. %Inside 
+9. Feature_bp_outside      
+10. %Outside        
 
+To assess the significance of these ratios, I perform shuffling experiments to see whether 
+we see similar ratios when we randomize the location of all of the breakpoints 
+(for the tailswap region we allow the possibility of all junctions occurring in Chr1, 
+or Chr4, or any combination of both, but it is proportional to the length of each region
+on Chr1 and Chr4).
+
+E.g. if you want to see how significant the above observed enrichment ratio for genes is
+(1.1497), you could run:
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062.gff  --feature_gff GFF_files/genes.gff --bp 100 --shuffles 1000
+
+
+You should now note the final four columns of output:
+
+11. Shuffled_ratio  
+12. Above (number of times column 9 exceeds column 2)
+13. Same (number of times column 9 equals column 2)   
+14. Below (number of times column 9 is below column 2)
+
+There will also be rows of output generated for each shuffle run. Just want to really look
+at first run (run = 0) and last run in file:
+
+	Run     Real_ratio      Bp      Feature Breakpoint_region_bp    Non_breakpoint_region_bp        Feature_bp_inside       %Inside Feature_bp_outside      %Outside        Shuffled_ratio  Above   Same    Below
+	0       1.1497  100     gene    8957    30350564        5428    60.60   15998341        52.71   1.1497  0       0       0
+	1000    1.1497  100     gene    9000    30350471        4064    45.16   15999705        52.72   0.8566  62      0       938
+
+This suggests that the observed enrichment ratio (1.1497) was exceeded in 62 out of 1000 
+shuffles. Ideally, we want to do this for all genome features, for both 2x and 3x regions,
+and for different sizes of breakpoint regions. E.g. set up lots of runs like this:
+
+	./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062.gff    --feature_gff GFF_files/all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > Results/FRAG00062_breakpoints_s1000_L10000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > Results/FRAG00062_2x_breakpoints_s1000_L10000.tsv
+	./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/all_TAIR10_features.gff --shuffles 1000 --verbose --bp 10000 > Results/FRAG00062_3x_breakpoints_s1000_L10000.tsv
+    
 
 Here are the principle results for a breakpoint region size of 1 Kbp with 1000 shuffles. The 
 last 3 columns of output count how many times the observed ratio from the real data was
@@ -641,7 +763,13 @@ the latter two sizes being highly significant (P < 0.01):
 #### Conclusion 4: not all FRAG lines may exhibit the same patterns of feature enrichment
 
 
-### New script to just count breakpoints that contain features of interest ###
+
+
+
+# Analysis: part 3
+
+
+## Count breakpoints that contain features of interest ##
 
 Now that we have a good idea about the pattern of genes and replication origins in 
 breakpoint regions, I wanted to more simply ask 'how many breakpoint regions' contain
@@ -650,128 +778,84 @@ at least 1 gene or replication origin (simply overlapping by a single bp counts 
 feature occupies in breakpoint regions, but maybe just knowing that 'at least one' 
 feature is in a breakpoint region is enough?
 
-I wrote a script to just do this. First I combined just the gene and replication origins
-into a new GFF file (to make things fast). We are really interested in comparing 2x and 3x
-breakpoint regions, and testing different sizes of breakpoint regions:
+My new script can do this for all features at once at various sizes of breakpoint region.
+E.g.
+
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/all_TAIR10_features.gff --bp 1000
+
+	FINAL: 36/46 breakpoint regions(78.3%) overlap with CDS
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with DNA_replication_origin
+	FINAL: 19/46 breakpoint regions(41.3%) overlap with DNAseI_hypersensitive_site
+	FINAL: 38/46 breakpoint regions(82.6%) overlap with exon
+	FINAL: 13/46 breakpoint regions(28.3%) overlap with five_prime_UTR
+	FINAL: 39/46 breakpoint regions(84.8%) overlap with gene
+	FINAL: 39/46 breakpoint regions(84.8%) overlap with mRNA
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with miRNA
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with ncRNA
+	FINAL: 16/46 breakpoint regions(34.8%) overlap with open_chromatin_state_1
+	FINAL: 15/46 breakpoint regions(32.6%) overlap with open_chromatin_state_2
+	FINAL: 12/46 breakpoint regions(26.1%) overlap with open_chromatin_state_3
+	FINAL: 9/46 breakpoint regions(19.6%) overlap with open_chromatin_state_4
+	FINAL: 6/46 breakpoint regions(13.0%) overlap with open_chromatin_state_5
+	FINAL: 14/46 breakpoint regions(30.4%) overlap with open_chromatin_state_6
+	FINAL: 6/46 breakpoint regions(13.0%) overlap with open_chromatin_state_7
+	FINAL: 6/46 breakpoint regions(13.0%) overlap with open_chromatin_state_8
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with open_chromatin_state_9
+	FINAL: 37/46 breakpoint regions(80.4%) overlap with protein
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with pseudogene
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with pseudogenic_exon
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with pseudogenic_transcript
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with rRNA
+	FINAL: 32/46 breakpoint regions(69.6%) overlap with satellite
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with snRNA
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with snoRNA
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with tRNA
+	FINAL: 15/46 breakpoint regions(32.6%) overlap with three_prime_UTR
+	FINAL: 5/46 breakpoint regions(10.9%) overlap with transposable_element
+	FINAL: 0/46 breakpoint regions(0.0%) overlap with transposable_element_gene
+	FINAL: 5/46 breakpoint regions(10.9%) overlap with transposon_fragment
+
+I also combined just the gene and replication origins into a new GFF file (to make things 
+fast). We are really interested in comparing 2x and 3x breakpoint regions, and testing 
+different sizes of breakpoint regions:
 
 	# 1000 bp
-	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --bp 1000
-	FINAL: Processed 46 breakpoint regions, found 39 (84.8%) overlap with gene
-	FINAL: Processed 46 breakpoint regions, found 0 (0.0%) overlap with DNA_replication_origin
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/genes_and_origins.gff --bp 1000
+	FINAL: 0/46 breakpoint regions (0.0%) overlap with DNA_replication_origin
+	FINAL: 39/46 breakpoint regions (84.8%) overlap with gene
 
-	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --bp 1000
-	FINAL: Processed 44 breakpoint regions, found 33 (75.0%) overlap with gene
-	FINAL: Processed 44 breakpoint regions, found 5 (11.4%) overlap with DNA_replication_origin
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/genes_and_origins.gff --bp 1000
+	FINAL: 5/44 breakpoint regions (11.4%) overlap with DNA_replication_origin
+	FINAL: 33/44 breakpoint regions (75.0%) overlap with gene
 
 	# 10,000 bp
-	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --bp 10000
-	FINAL: Processed 46 breakpoint regions, found 45 (97.8%) overlap with gene
-	FINAL: Processed 46 breakpoint regions, found 4 (8.7%) overlap with DNA_replication_origin
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/genes_and_origins.gff --bp 10000
+	FINAL: 4/46 breakpoint regions (8.7%) overlap with DNA_replication_origin
+	FINAL: 45/46 breakpoint regions (97.8%) overlap with gene
 
-	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --bp 10000
-	FINAL: Processed 44 breakpoint regions, found 42 (95.5%) overlap with gene
-	FINAL: Processed 44 breakpoint regions, found 17 (38.6%) overlap with DNA_replication_origin
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/genes_and_origins.gff --bp 10000
+	FINAL: 17/44 breakpoint regions (38.6%) overlap with DNA_replication_origin
+	FINAL: 42/44 breakpoint regions (95.5%) overlap with gene
 
 	# 25,000 bp
-	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --bp 25000
-	FINAL: Processed 46 breakpoint regions, found 46 (100.0%) overlap with gene
-	FINAL: Processed 46 breakpoint regions, found 10 (21.7%) overlap with DNA_replication_origin
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/genes_and_origins.gff --bp 25000
+	FINAL: 10/46 breakpoint regions (21.7%) overlap with DNA_replication_origin
+	FINAL: 46/46 breakpoint regions (100.0%) overlap with gene
 
-	./count_breakpoints_with_features.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --bp 25000
-	FINAL: Processed 44 breakpoint regions, found 44 (100.0%) overlap with gene
-	FINAL: Processed 44 breakpoint regions, found 20 (45.5%) overlap with DNA_replication_origin
-	
+	./count_breakpoints_with_features.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/genes_and_origins.gff --bp 25000
+	FINAL: 20/44 breakpoint regions (45.5%) overlap with DNA_replication_origin
+	FINAL: 44/44 breakpoint regions (100.0%) overlap with gene	
+
 #### Conclusion 5: Breakpoint regions of 10 Kbp or larger are almost certain to contain at least one gene (in either 2x or 3x data sets)	
 
 #### Conclusion 6: The majority of 3x breakpoint regions do *not* contain replication origins, however they are more likely to contain them than 2x breakpoint regions
 
 
-
-### Try to look for overlap between breakpoint regions and DNase I hypersensitive sites (DHS) ###
-
-This paper by Zhang et al. (2012) describes a set of hypersensitive sites in A. thaliana:
-
-[Genome-Wide Identification of Regulatory DNA Elements and Protein-Binding Footprints 
-Using Signatures of Open Chromatin in Arabidopsis](http://www.plantcell.org/content/24/7/2719.full)
-
-In this paper, they generate DHS maps for seed and flower tissues. These data were submitted
-to the GEO database and are available under accession [GSE34318](http://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE34318).
-One of the data files in in BED format (GSE34318_dhsites_region.bed) and this includes the 
-location of DHS regions (presumably after some threshold value has been exceeded) for both 
-leaf and seed tissues.
-
-I extracted just the DHS regions that were identified in wildtype leaf libraries, and 
-converted to GFF.
-
-First quick replacement of spaces with tabs in downloaded bed file and then convert to 
-desired GFF format with simple Perl script:
-
-	tr ' ' '\t' < GSE34318_dhsites_region.bed  | grep wtleaf| sort -k 1,1 -k 2n,2n   > GSE34318_dhsites_region_sorted.bed
-	./bed2gff.pl GSE34318_dhsites_region_sorted.bed  > DHS.gff
-	
-Now combine with main file:
-
-	cat DHS.gff >> all_TAIR10_features.gff
-	grep -vE "^#" all_TAIR10_features.gff | sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
-
-Now compare to our master GFF files of breakpoints. Again we may want to try several breakpoint 
-region sizes (and do this for 2x and 3x). Will use a wrapper script that will look at 
-FRAG00045 and FRAG00062 (2x and 3x) for various sizes. Commands will again be in the form
-of:
-
-	./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff DHS.gff --shuffles 1000 --verbose --bp 10000 > FRAG00062_2x_breakpoints_s1000_L10000.tsv
-
-
-### Now look at Chromatin state information ###
-
-This new paper by Sequeira-Mendes et al. (2014) describes a set of distinct chromatin 
-states in *A. thaliana*: 
-
-[The Functional Topography of the Arabidopsis Genome Is Organized in a Reduced Number of 
-Linear Motifs of Chromatin States](http://www.plantcell.org/content/early/2014/06/11/tpc.114.124578.long)
-
-They mostly use existing histone and other epigenetic modification data, but have some of
-their own. Using principal components analysis, they end up defining 9 different states
-of chromatin. These are available in supplemental data file 2 (Excel spreadsheet).
-
-I converted this to a GFF file. Sequence Ontology only has one term for chromatin
-(SO:0001747 open_chromatin_state) so I will use the 9th column of GFF to distinguish the
-9 different states.
-
-First export each tab in Excel spreadsheet to a text file (Windows formatted text), e.g
-state1.txt, state2.txt etc. Then simple Perl script to convert them to GFF.
-
-	./chromatin_state2gff.pl > tmp.gff
-	cat tmp.gff >> all_TAIR10_features.gff
-	sort -k 1,1 -k 4n,4n  all_TAIR10_features.gff > tmp.gff; mv tmp.gff all_TAIR10_features.gff	
-
-Now try a final run with a new set of (simplified) breakpoint region sizes (100, 500,
-1 Kbp, 5 Kbp, 10 Kbp, and 20 Kbp). Final set of features that we are looking at is:
-
-CDS
-chromosome
-DNA_replication_origin
-DNAseI_hypersensitive_site
-exon
-five_prime_UTR
-gene
-miRNA
-mRNA
-ncRNA
-open_chromatin_state (9 different states)
-protein
-pseudogene
-pseudogenic_exon
-pseudogenic_transcript
-rRNA
-satellite
-snoRNA
-snRNA
-three_prime_UTR
-transposable_element
-transposable_element_gene
-transposon_fragment
-tRNA
+####################################
+#
+# CHECKING
+#
+####################################
 
 
 ### Updated results for paper ###
@@ -780,19 +864,24 @@ Now want to reproduce results with more sizes of breakpoint regions. Only intere
 FRAG00062 at first, and will just use percentage of overlapping bp inside/outside breakpoint
 regions in the final figure.
 
-Modified overlap_between_two_gff_files.pl script at this point to also include the value
-of --bp in the final output file (now as 3rd column of output). Use bash loop script to do
-this. First for all breakpoint regions in increasing order of magnitude:
+	#!/bin/bash
 
-#!/bin/bash
+	for i in 100 1000 10000;
+	do
+        echo "./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062.gff    --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_${i}bp_S1000.tsv \& ";
+        ./overlap_between_two_gff_files.pl       --breakpoint_gff GFF_files/FRAG00062.gff    --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_${i}bp_S1000.tsv \& 
 
-for i in 10 100 1000 10000 100000 1000000;
-do
-        echo "./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_2x_${i}bp_for_paper.tsv \& ";
-        ./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_2x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_2x_${i}bp_for_paper.tsv \& ;
-        echo "./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_3x_${i}bp_for_paper.tsv \& ";
-        ./overlap_between_two_gff_files.pl --breakpoint_gff FRAG00062_3x.gff --feature_gff genes_and_origins.gff --verbose --bp $i > FRAG00062_3x_${i}bp_for_paper.tsv \& ;
-done
+        echo "./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00045.gff    --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00045_2x_${i}bp_S1000.tsv \& ";
+        ./overlap_between_two_gff_files.pl       --breakpoint_gff GFF_files/FRAG00045.gff    --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00045_2x_${i}bp_S1000.tsv \& 
+
+        echo "./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_2x_${i}bp_S1000.tsv \& ";
+        ./overlap_between_two_gff_files.pl       --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_2x_${i}bp_S1000.tsv \& 
+
+        echo "./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_3x_${i}bp_S1000.tsv \& ";
+        ./overlap_between_two_gff_files.pl       --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/all_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_3x_${i}bp_S1000.tsv \& 
+
+
+	done
 
 Combine results into two files (not properly sorted):
 
@@ -808,24 +897,6 @@ And then combine results as before (but with better sorting):
 	cat FRAG00062_2x_*for_paper* | sort -u | sort -k4,4 -k3n,3n > 2x_for_paper_results_100-5000.tsv
 	cat FRAG00062_3x_*for_paper* | sort -u | sort -k4,4 -k3n,3n > 3x_for_paper_results_100-5000.tsv
 
-Tried to make a modified version of overlap script which centers breakpoint regions around middle
-of blocks.
-
-1. Center regions around the breakpoint (as before)ÊÑÊcode = B
-2. Center regions around midpoint of block (leads to 1/2 as many datapoints) ÑÊcode = M
-
-I modified overlap script to take a new command-line parameter (--type) which can use B,
-or M (defaults to B). For both types, he region size is 1 bp greater than 
-specified (centered around a single base, e.g. 100 bp = 50 bp either side of center
-point). 
-
-Run all of this using double nested loop in bash_loop.sh script and iterate to 
-larger sizes (200Ð50,000 bp in 200 bp increments). Then tidy up:
-
-	cat FRAG00062_2x_*for_paper* | sort -u | sort -k4,4 -k5,5 -k3n,3n > 2x_for_paper_results_200-50000.tsv
-	cat FRAG00062_3x_*for_paper* | sort -u | sort -k4,4 -k5,5 -k3n,3n > 3x_for_paper_results_200-50000.tsv
-	
-Also did one more set of runs from 1,000 bp up to 250,000 bp in 1,000 increments.
 
 
 ### New script ###
@@ -908,4 +979,61 @@ using suitable ranges, bin sizes, and step factors for each particular genomic f
 
 
 
-Problem with my approach of 
+We have 5 shorter 2x regions which may (somehow) be more like 3x regions. To test 
+this I made a version of FRAG00062_2x.gff which excludes these duplicated blocks:
+
+	cat FRAG00062_2x.gff | grep -vE "block0010|block0017|block0032|block0033|block0035|block0042" > FRAG00062_2x_lite.gff
+	
+Can try seeing whether there is a difference to the 2x genes plot when you exclude these
+5 data points:
+
+	./find_bias_around_breakpoints.pl --break FRAG00062_2x_lite.gff --feat genes.gff --flip --range 3000 --bin 100 --step 25 > figure_2x_lite_genes_25000_100_25.tsv &
+
+This doesn't seem to make too much difference. I.e. short 2x regions are possibly not that
+different from the longer regions (at least in terms of gene density around edge of 
+blocks).
+
+Now we seem to have settled on some window and step sizes that work, maybe time to finalize
+on some final output files. First need to make some new GFF files:
+
+	grep -w transposable_element all_TAIR10_features.gff  > transposable_element.gff
+	grep -w pseudogene all_TAIR10_features.gff > pseudogene.gff
+	grep "Note=\"state1" all_TAIR10_features.gff > state1.gff
+	grep "Note=\"state2" all_TAIR10_features.gff > state2.gff
+	grep "Note=\"state3" all_TAIR10_features.gff > state3.gff
+	grep "Note=\"state4" all_TAIR10_features.gff > state4.gff
+	grep "Note=\"state5" all_TAIR10_features.gff > state5.gff
+	grep "Note=\"state6" all_TAIR10_features.gff > state6.gff
+	grep "Note=\"state7" all_TAIR10_features.gff > state7.gff
+	grep "Note=\"state8" all_TAIR10_features.gff > state8.gff
+	grep "Note=\"state9" all_TAIR10_features.gff > state9.gff
+	grep -w satellite all_TAIR10_features.gff > satellite.gff	
+	
+Will plot at 3 different scales for various features (many of these might only 
+appear as supplemental results):
+
++ 2,000 bp (window) and 200 bp (step)
++ 500 bp (window) and 50 bp (step)
++ 100 bp (window) and 10 bp (step)
+
+All step sizes are now one tenth of window size. Will run all three combinations for
+each feature (using range of -50,000 to +50,000 bp). Time to use a bash looping script
+again.
+
+	#!/bin/bash
+
+	for feature in genes pseudogene transposable_element satellite replication_origins DHS state1 state2 state3 state4 state5 state6 state7 state8 state9
+	do
+
+			for window in 2000 500 100
+			do
+			let "step=$window/10"
+			echo "Running: $feature $window $step"
+			echo "./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat ${feature}.gff --flip  --bin $window --step $step > figure_2x_${feature}_${window}_${step}.tsv &"
+			./find_bias_around_breakpoints.pl --break FRAG00062_2x.gff --feat ${feature}.gff --flip  --bin $window --step $step > figure_2x_${feature}_${window}_${step}.tsv &
+
+			echo "./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat ${feature}.gff --flip  --bin $window --step $step > figure_3x_${feature}_${window}_${step}.tsv &"
+			./find_bias_around_breakpoints.pl --break FRAG00062_3x.gff --feat ${feature}.gff --flip  --bin $window --step $step > figure_3x_${feature}_${window}_${step}.tsv &
+			echo
+			done
+	done

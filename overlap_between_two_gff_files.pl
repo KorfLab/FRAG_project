@@ -14,12 +14,13 @@ use strict;
 use warnings FATAL => 'all';
 use List::Util qw(shuffle);
 use Getopt::Long;
+use FRAG;
 
 ###################################################### 
 #              Command-line options                  #
 ###################################################### 
 
-my ($breakpoint_gff, $feature_gff, $bp, $shuffles, $help, $type, $verbose) = (undef, undef, 10000, 0, undef, 'B', undef);
+my ($breakpoint_gff, $feature_gff, $bp, $shuffles, $help, $verbose) = (undef, undef, 1000, 0, undef, undef);
 
 my $usage = "$0 
 Mandatory arguments:
@@ -29,7 +30,6 @@ Mandatory arguments:
 Optional arguments:
 --bp <how many bp to extract from inside/outside region (default = $bp)>
 --shuffles <how many shuffling iterations to perform (default = $shuffles)>
---type <nature of region to check for overlap (breakpoint (B) or mid-point (M), default = $type)>
 --verbose - turn on extra output
 --help 
 	
@@ -41,7 +41,6 @@ GetOptions (
 	"bp=i"             => \$bp,
 	"shuffles=i"       => \$shuffles,
 	"help"             => \$help,
-	"type=s"           => \$type,
 	"verbose"          => \$verbose,
 );
 
@@ -55,24 +54,22 @@ die $usage if (not defined $feature_gff);
 # Set up chromosome data
 ####################################
 
-# Need a hash to store sizes of chromosomes 
-my %chr_sizes;
-$chr_sizes{'Chr1'} = 30427671;
-$chr_sizes{'Chr1'} = 28315915; # a fudge to deal with tail swap, coordinate from Han
-$chr_sizes{'Chr2'} = 19698289;
-$chr_sizes{'Chr3'} = 23459830;
-$chr_sizes{'Chr4'} = 18585056;
-$chr_sizes{'Chr5'} = 26975502;
+# Use a hash to store sizes of chromosomes 
+# keys will be 'chr1', 'chr2' etc.
+# want the shorter 'tailswap' length for Chr1
+my %chr_sizes = FRAG::get_chromosome_lengths('tailswap'); 
 
 # where does the tail swap begin on Chr4?
-my $pre_tailswap_length = 16541500; # coordinate from Han
+my $pre_tailswap_length = FRAG::get_chr4_pre_tailswap_length();
 
+# for the main run and each shuffle, we will need to generate a fake 
+# string corresponding to the length of each chromosome
 # will end up representing each chromosome as a string of dashes
-my %chr_seqs;
+my %chr_seqs = FRAG::initalize_virtual_chromosome_sequences();
 
-# will need to keep track of how many breakpoints there are, 
-# this will be important for when we shuffle data later on
-my $number_of_breakpoints = 0;
+# get details of breakpoints coordinates
+my %breakpoints = FRAG::read_breakpoint_data($breakpoint_gff);
+
 
 
 ####################################
@@ -81,7 +78,7 @@ my $number_of_breakpoints = 0;
 #
 ####################################
 
-print "Run\tReal_ratio\tBp\tFeature\tType\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
+print "Run\tReal_ratio\tBp\tFeature\tBreakpoint_region_bp\tNon_breakpoint_region_bp\t";
 print "Feature_bp_inside\t%Inside\t";
 print "Feature_bp_outside\t%Outside\t";
 print "Shuffled_ratio\t";
@@ -95,53 +92,37 @@ my %main_results;
 # (as denoted by $shuffles)
 for (my $i = 0; $i <= $shuffles; $i++){
 
-	# for the main run and each shuffle, we will need to generate a fake 
-	# string corresponding to the length of each chromosome
-	initalize_virtual_chromosome_sequences();
+	# need to reset our master set of sequences
+	# we'll use tailswap mode to treat Chr4 differently
+	%chr_seqs = FRAG::initalize_virtual_chromosome_sequences('tailswap');
 
 	if ($i == 0){
 		warn "Main run with unshuffled data\n";
-		# read main breakpoint data and modify %chr_seqs hash accordingly
-		read_breakpoint_data();
 	} else{
-		warn "Shuffle $i\n";
-	
+		warn "Shuffle $i\n";	
 		# need to shuffle location of junctions
 		shuffle_breakpoints();
 	}
 
+	# now mask $bp base pairs around each breakpoints (for sequences stored in %chr_seqs)
+	%chr_seqs = FRAG::mask_breakpoint_regions($bp, \%chr_seqs, \%breakpoints);
+  
+ 
 	##########################################
 	# Main loop over each possible feature
 	##########################################
 
 	# track all results by final ratio and by difference
 	my %tmp_results;
-	# not the quickest way to do this, but ensures we don't run out of memory
-
-	my @gff_features;
-
-	push (@gff_features, qw(CDS DNAseI_hypersensitive_site DNA_replication_origin exon));
-	push (@gff_features, qw(five_prime_UTR gene mRNA miRNA ncRNA));
-	push (@gff_features, qw(protein pseudogene pseudogenic_exon pseudogenic_transcript)); 
-	push (@gff_features, qw(satellite snoRNA tRNA three_prime_UTR transposable_element));
-	push (@gff_features, qw(transposable_element_gene transposon_fragment));
-
-	# this is a bit of a hack, will have 9 different features for open_chromatin_state
-	# even though they all share the same GFF feature name
-	push (@gff_features, qw(open_chromatin_state_1 open_chromatin_state_2));
-	push (@gff_features, qw(open_chromatin_state_3 open_chromatin_state_4));
-	push (@gff_features, qw(open_chromatin_state_5 open_chromatin_state_6));
-	push (@gff_features, qw(open_chromatin_state_7 open_chromatin_state_8));
-	push (@gff_features, qw(open_chromatin_state_9));
-
-	@gff_features =  qw(gene DNA_replication_origin);
 	
-	foreach my $gff_feature (@gff_features){
+	
+	# now loop over all GFF feature sin our input file	
+	foreach my $gff_feature (sort (FRAG::get_list_of_GFF_features($feature_gff))){
 		warn "\tProcessing $gff_feature data\n" if ($verbose);
 		
 		# create copies of virtual chromosome sequences
 		my %tmp_chr_seqs = %chr_seqs;
-
+ 
 		# count how many times we see this feature
 		my $feature_count = 0;
 	 
@@ -267,7 +248,6 @@ for (my $i = 0; $i <= $shuffles; $i++){
 		print "$main_results{$gff_feature}{ratio}\t";
 		print "$bp\t";
 		print "$gff_feature\t";
-		print "$type\t";
 		print "$original_breakpoint_bp\t";
 		print "$original_non_breakpoint_bp\t";
 		print "$feature_overlapping_breakpoint_regions\t";
@@ -309,66 +289,6 @@ exit;
 #
 ####################################
 
-# create fake chromosome sequences as strings of '-'
-sub initalize_virtual_chromosome_sequences{
-	foreach my $chr (qw(Chr1 Chr2 Chr3 Chr4 Chr5)){
-		$chr_seqs{$chr} = '-' x $chr_sizes{$chr};
-	
-		# have to do something different for Chromosome 4 as we are only interested in the 
-		# tail swap region. So mask out first part of chromosome with a different character
-		if($chr eq 'Chr4'){
-			substr($chr_seqs{$chr}, 0, $pre_tailswap_length) = ("x" x $pre_tailswap_length);		
-		}
-	}
-}
-
-
-###############################################################
-# read junction coordinates and represent in virtual sequences
-###############################################################
-
-sub read_breakpoint_data{
-	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
-
-	while(my $line = <$in>){
-		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
-
-		# skip comments
-		next if ($line =~ m/^#/);
-
-		# what we do next depends on what type of data we want to use
-		# in all cases we want to end up with a min and max coordinate to span a
-		# region that will masked out of %chr_seqs
-		my ($min, $max);
-		
-		# can do some things the same for breakpoint, inside, and outside regions
-		if ($type eq 'B'){
-		
-			# want chromosome breakpoints, but ignore any which are effectively the ends of
-			# the chromosomes
-			next unless ($feature eq 'chromosome_breakpoint' and $comment !~ m/telomeric end/);
-			$number_of_breakpoints++;
-		
-			# define a region around this breakpoint based on value of $bp
-			($min, $max) = ($s - $bp/2, $s + $bp/2);
-			 
-		} else{
-			# things are a bit different for midpoint regions (only 1 region per block)
-
-			next unless ($feature eq 'copy_number_gain');
-			$number_of_breakpoints++;
-			
-			# now define a region around the center of this block
-			my $mid_point = int($s + (($e - $s)/2));
-			($min, $max) = ($mid_point - $bp/2, $mid_point + $bp/2);
-		}
-
-		# mask where breakpoint regions are in chromosome
-		substr($chr_seqs{$chr}, $min, $bp) = ("B" x $bp);
-	}
-
-	close($in);
-}
 
 
 
@@ -379,34 +299,31 @@ sub read_breakpoint_data{
 
 sub shuffle_breakpoints{
 
-	for (my $i = 0; $i < $number_of_breakpoints; $i++){
-	
-		my $random_coord = int(rand($chr_sizes{'Chr4'}));
+	foreach my $breakpoint (keys %breakpoints){
 		
+		# choose random position anywhere between length of sequence representing
+		# chr1 (pre-tailswap) + region on chr4 after tailswap
+		# have to factor in size of $bp as will need to extract a window either side 
+		# of breakpoint
 		
-		# now define a region around this breakpoint coordinate based on value of $bp
-		my ($min, $max) = ($random_coord - $bp/2, $random_coord + $bp/2);
+		my $max_coord = $chr_sizes{'Chr1'} + ($chr_sizes{'Chr4'} - $pre_tailswap_length + 1);
+		
+		my $random_coord = int(rand($max_coord));
+		
+		# is this coordinate on chromosome 1 but more 1/2 a window away from ends?
+		if (($random_coord < ($chr_sizes{'Chr1'} - $bp/2)) and ($random_coord > ($bp/2))){
+			$breakpoints{$breakpoint}{chr} = 'Chr1';
+			$breakpoints{$breakpoint}{pos} = $random_coord;
+		} elsif(($random_coord > ($chr_sizes{'Chr1'} + $bp/2)) and ($random_coord < ($max_coord - $bp/2))){
+			# is this coordinate on chromosome 4 but more than 1/2 a window away from ends?
 	
-		# which chromosome to modify depends on whether the random coordinate
-		# is before or after the tailswap area
-		my $chr;
-		if ($random_coord < ($pre_tailswap_length - $bp/2)){
-			$chr = "Chr1";
-#			print "$i) Random coord = $random_coord\tchr=$chr\n";
-
-		} elsif($random_coord > ($pre_tailswap_length + $bp/2)){
-			$chr = "Chr4";		
-#			print "$i) Random coord = $random_coord\tchr=$chr\n";
-
+			$breakpoints{$breakpoint}{chr} = 'Chr4';
+			$breakpoints{$breakpoint}{pos} = $random_coord - $chr_sizes{'Chr1'} + $pre_tailswap_length;		
+			
 		} else{
-			# could potentially choose a position within $bp/2 bp of chr1/chr4 breakpoint
-			# so need to redo if this happens
-#			print "$i) Random coord = $random_coord\tchr=NA\n";
+			# try again
 			redo;
-		}
-		
-		# mask where breakpoint regions are in chromosome
-		substr($chr_seqs{$chr}, $min, $bp) = ("B" x $bp);
+		}		
 	}
 
 }
