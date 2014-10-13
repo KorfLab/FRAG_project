@@ -2,12 +2,12 @@
 
 ## Overview ##
 
-To contain code and data files for the Fragmentation project, investigating shattered 
-chromosome phenotypes in _Arabidopsis thaliana_. The main focus of this repository
+This directory contains code and data files for the Fragmentation project, investigating shattered 
+chromosome phenotypes in _Arabidopsis thaliana_. The original focus of this repository
 is to develop code to help determine breakpoints between duplicated and triplicated
-regions of chromosomes (see 'Block_detection_code/' directory) and also to see whether
-certain genomic features are over- or under-represented at either the breakpoint regions
-or in the blocks themselves.
+regions of chromosomes (see [Block_detection_code/README.md](Block_detection_code/README.md)) 
+but the focus shifted to write code that will see whether certain genomic features are 
+over- or under-represented at either the breakpoint regions or in the blocks themselves.
 	
 
 ## Generating Data: Making Master GFF file of all genomic features ##
