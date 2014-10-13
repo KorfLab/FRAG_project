@@ -12,12 +12,13 @@
 use strict;
 use warnings FATAL => 'all';
 use Getopt::Long;
+use FRAG;
 
 ###################################################### 
 #              Command-line options                  #
 ###################################################### 
 
-my ($breakpoint_gff, $feature_gff,  $help, $verbose, $mode, $flip) = (undef, undef, undef, undef, "B", 0);
+my ($breakpoint_gff, $feature_gff,  $help, $verbose, $flip) = (undef, undef, undef, undef, 0);
 my ($range, $bin_size, $step_size)  = (25000, 500, 50);
 
 my $usage = "$0 
@@ -26,7 +27,6 @@ Mandatory arguments:
 --feature_gff <GFF file of target feature>
 
 Optional arguments:
---mode <which edge of block to look at, left (L), right (R), or both (B), default = $mode>
 --flip <whether to flip 'right' blocks to make results consistent for inside/outside blocks>
 --range <max distance from breakpoint, default = $range>
 --bin_size <interval to use, default = $bin_size>
@@ -44,7 +44,6 @@ GetOptions (
 	"step_size=i"      => \$step_size,
 	"flip"             => \$flip,
 	"help"             => \$help,
-	"mode=s"           => \$mode,
 	"verbose"          => \$verbose,
 );
 
@@ -52,27 +51,29 @@ GetOptions (
 die $usage if ($help);
 die $usage if (not defined $breakpoint_gff);
 die $usage if (not defined $feature_gff);
-die $usage if ($mode !~ m/^(L|R|B)$/);
-
 
 ####################################
 # Set up chromosome data
 ####################################
 
-# Need a hash to store sizes of chromosomes 
-my %chr_sizes;
-$chr_sizes{'Chr1'} = 30427671;
-$chr_sizes{'Chr1'} = 28315915; # a fudge to deal with tail swap, coordinate from Han
-$chr_sizes{'Chr2'} = 19698289;
-$chr_sizes{'Chr3'} = 23459830;
-$chr_sizes{'Chr4'} = 18585056;
-$chr_sizes{'Chr5'} = 26975502;
+# Use a hash to store sizes of chromosomes 
+# keys will be 'chr1', 'chr2' etc.
+# want the shorter 'tailswap' length for Chr1
+my %chr_sizes = FRAG::get_chromosome_lengths('tailswap'); 
 
 # where does the tail swap begin on Chr4?
-my $pre_tailswap_length = 16541500; # coordinate from Han
+my $pre_tailswap_length = FRAG::get_chr4_pre_tailswap_length();
 
+# read main block data to get left & right coordinates of each block
+my %blocks = FRAG::read_block_data($breakpoint_gff);
+
+# read and store coordinates of feature from a single-feature GFF file
+my %features = FRAG::read_feature_data($feature_gff); 
+
+# we will need to generate a fake string corresponding to the length of each chromosome
 # will end up representing each chromosome as a string of dashes
-my %chr_seqs;
+my %chr_seqs = FRAG::initalize_virtual_chromosome_sequences();
+
 
 
 ####################################
@@ -89,16 +90,7 @@ print "Feature_bp_outside\t%Outside\tRatio\n";
 # key will be feature, value will be ratio. Do similar thing for differences
 my %main_results;
 
-# we will need to generate a fake 
-# string corresponding to the length of each chromosome
-initalize_virtual_chromosome_sequences();
 
-# read main breakpoint data and feature data and store in hashes
-my %blocks;
-read_block_data();
-
-my %features;
-read_feature_data(); 
 
 ##########################################
 # Main loop over different positions around breakpoint
@@ -110,11 +102,12 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 	
 	my ($s, $e) = ($i, $i + $bin_size);
 	my $mid = int($s + (($e - $s) / 2));
-#		print "$s $e\n"; 
+	warn "Analysizing all windows at $mid bp ($s to $e) from all breakpoints\n" if ($verbose); 
 
-	# create copies of virtual chromosome sequences
-	# one to count breakpoint bp before masking with features
-	# one to count breakpoint bp after masking with feature
+	# create two copies of virtual chromosome sequences
+	# both copies will be masked with breakpoint regions
+	# but only 2nd copy will be additionally masked with target features
+	# can then compare both sets
 	my %tmp_chr_seqs_1 = %chr_seqs;
 	my %tmp_chr_seqs_2 = %chr_seqs;
 
@@ -127,48 +120,37 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 
 		# may not be able to deal with ends of some blocks if they are
 		# first or last on chromosome (or if $bin_size is really large)
-		next EDGE if ($mode =~ m/L|B/ and ($left  - abs($s) < 1));
-		next EDGE if ($mode =~ m/L|B/ and ($left  + abs($e) > $chr_sizes{$bp_chr}));
-		next EDGE if ($mode =~ m/R|B/ and ($right - abs($s) < 1));
-		next EDGE if ($mode =~ m/R|B/ and ($right + abs($e) > $chr_sizes{$bp_chr}));
+		next EDGE if ($left  - abs($s) < 1);
+		next EDGE if ($left  + abs($e) > $chr_sizes{$bp_chr});
+		next EDGE if ($right - abs($s) < 1);
+		next EDGE if ($right + abs($e) > $chr_sizes{$bp_chr});
 
 
-#		print "$s to $e\t$edge\t$bp_chr\t$left\t$right\t";
-		
-		# mask where breakpoint regions are in chromosome
-		if ($mode eq 'L'){
-#			print "L:",  $left  + $s, "-", $left + $s + $bin_size, "\n";
-			substr($tmp_chr_seqs_1{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
-			substr($tmp_chr_seqs_2{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
-		} elsif ($mode eq 'R') {
-#			print "R:",  $right  + $s, "-", $right + $s + $bin_size, "\n";
-			substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
-			substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
-		} else{
-			# we must be in 'B' mode = BOTH edges
-#			print "L:",  $left  + $s, "-", $left + $s + $bin_size, "\t";
-			substr($tmp_chr_seqs_1{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
-			substr($tmp_chr_seqs_2{$bp_chr}, $left  + $s, $bin_size) = ("B" x $bin_size);
+		# what coordinate do we start masking breakpoint regions
+		my $left_mask_start  = $left + $s;
+		my $right_mask_start = $right + $s;
+		my $left_mask_end    = $left_mask_start + $bin_size - 1;
+		my $right_mask_end   = $right_mask_start + $bin_size - 1;
 
-			# if we are in $flip mode, then we need to deal with the 'right' edge differently
-			# e.g. position -1,000 to -900 should be changed to be +900 to +1,000
-			# this ensures that we are consistent with looking at regions that are 
-			# either inside or outside blocks
-			if ($flip){
-#				print "R:", $right - $e, "-", $right - $e + $bin_size, "\n";
-				substr($tmp_chr_seqs_1{$bp_chr}, $right - $e, $bin_size) = ("B" x $bin_size);
-				substr($tmp_chr_seqs_2{$bp_chr}, $right - $e, $bin_size) = ("B" x $bin_size);						
+		# if we are in $flip mode, then we need to deal with the 'right' edge differently
+		# e.g. position -1,000 to -900 should be changed to be +900 to +1,000
+		# this ensures that we are consistent with looking at regions that are 
+		# either inside or outside blocks
+		if ($flip){
+			$right_mask_start = $right - $e;
+			$right_mask_end   = $right_mask_start + $bin_size - 1;
+		} 
 
-			} else{			
-#				print "R:", $right + $s, "-", $right + $s + $bin_size, "\n";
-				substr($tmp_chr_seqs_1{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);
-				substr($tmp_chr_seqs_2{$bp_chr}, $right + $s, $bin_size) = ("B" x $bin_size);		
-			}
-		}
+		# now mask where breakpoint regions are in chromosome
+		substr($tmp_chr_seqs_1{$bp_chr}, $left_mask_start,  $bin_size) = ("B" x $bin_size);
+		substr($tmp_chr_seqs_2{$bp_chr}, $left_mask_start,  $bin_size) = ("B" x $bin_size);
+		substr($tmp_chr_seqs_1{$bp_chr}, $right_mask_start, $bin_size) = ("B" x $bin_size);
+		substr($tmp_chr_seqs_2{$bp_chr}, $right_mask_start, $bin_size) = ("B" x $bin_size);						
+
+		warn "\t$s to $e\t$edge\t$bp_chr\tBLOCK:$left-$right\t$left_mask_start-$left_mask_end\t$right_mask_start-$right_mask_end\n" if ($verbose);
 	}	
 	
-	# now mask features against breakpoint regions that have already been masked
-	
+	# now mask these sequences with genomic features (on top of masking with breakpoint regions)
 	foreach my $feat (sort {$a <=> $b} keys %features){ 
 
 		my $chr = $features{$feat}{'chr'};
@@ -179,6 +161,7 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 		my $length = $e - $s + 1;
 		substr($tmp_chr_seqs_2{$chr}, $s, $length) = ("o" x $length); 
  	}
+
 
 	# now compare patterns in original virtual sequence (just blocks)
 	# and tmp virtual sequence (masked with feature)
@@ -234,90 +217,7 @@ for(my $i = $min; $i + $bin_size <= $max; $i += $step_size){
 exit;
 
 
-####################################
-#
-# S U B R O U T I N E S
-#
-####################################
 
-# create fake chromosome sequences as strings of '-'
-sub initalize_virtual_chromosome_sequences{
-	foreach my $chr (qw(Chr1 Chr2 Chr3 Chr4 Chr5)){
-		$chr_seqs{$chr} = '-' x $chr_sizes{$chr};
-	
-		# have to do something different for Chromosome 4 as we are only interested in the 
-		# tail swap region. So mask out first part of chromosome with a different character
-		if($chr eq 'Chr4'){
-			substr($chr_seqs{$chr}, 0, $pre_tailswap_length) = ("x" x $pre_tailswap_length);		
-		}
-	}
-}
-
-
-###############################################################
-# read junction coordinates and represent in virtual sequences
-###############################################################
-
-sub read_block_data{
-	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
-
-	my $block_counter = 0;
-	while(my $line = <$in>){
-		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
-
-		# skip comments
-		next if ($line =~ m/^#/);
-
-		# only interested in 2x or 3x blocks
-		next unless ($feature eq 'copy_number_gain');
-
-		$block_counter++;
-		
-		# 3 things to store for each block
-		$blocks{$block_counter}{'chr'}   = $chr;
-		$blocks{$block_counter}{'left'}  = $s;
-		$blocks{$block_counter}{'right'} = $e;
-	}
-
-	close($in);
-}
-
-
-
-###############################################################
-# read feature data from input GFF file 
-###############################################################
-
-sub read_feature_data{
-
-	my $feature_count = 0;
-	
-	open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
-
-	while(my $line = <$in>){
-		chomp($line);
-		# skip GFF header lines
-		next if ($line =~ m/^#/);
-		
-		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
-
-		#  skip if not chr1 or chr4?
-		next unless (($chr eq 'Chr1') or ($chr eq 'Chr4'));
-
-		# skip tailswap regions of Chr1 and Chr4
-		next if ($chr eq 'Chr1' and $s > $chr_sizes{'Chr1'});
-		next if ($chr eq 'Chr4' and $s < $pre_tailswap_length);
-
-		$feature_count++;
-		
-		# add data to hash
-		$features{$feature_count}{'chr'}   = $chr;
-		$features{$feature_count}{'start'} = $s;
-		$features{$feature_count}{'end'}   = $e;
-
-	}
-	close($in);
-}
 
 __END__
 

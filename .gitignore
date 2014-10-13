@@ -1,5 +1,5 @@
 # don't include big data files
-*.tsv
-*.gff
+#*.tsv
+#*.gff
 *.xlsx
 *.bed

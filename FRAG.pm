@@ -156,6 +156,41 @@ sub mask_breakpoint_regions{
 }
 
 
+###############################################################
+# read junction coordinates and represent in virtual sequences
+###############################################################
+
+sub read_block_data{
+	
+	my ($breakpoint_gff) = @_;
+	
+	my %blocks;
+	
+	open (my $in, "<", $breakpoint_gff) or die "Can't read $breakpoint_gff\n";
+
+	my $block_counter = 0;
+	while(my $line = <$in>){
+		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
+
+		# skip comments
+		next if ($line =~ m/^#/);
+
+		# only interested in 2x or 3x blocks
+		next unless ($feature eq 'copy_number_gain');
+
+		$block_counter++;
+		
+		# 3 things to store for each block
+		$blocks{$block_counter}{'chr'}   = $chr;
+		$blocks{$block_counter}{'left'}  = $s;
+		$blocks{$block_counter}{'right'} = $e;
+	}
+
+	close($in);
+	return(%blocks);
+}
+
+
 ####################################
 # Get list of all features in current GFF file
 ####################################
@@ -191,6 +226,46 @@ sub get_list_of_GFF_features{
 
 	return(keys %features);
 	
+}
+
+###############################################################
+# read feature data from single-feature GFF file 
+###############################################################
+
+sub read_feature_data{
+
+	my ($feature_gff) = @_;
+	
+	my %features;
+	
+	my $feature_count = 0;
+	
+	open (my $in, "<", $feature_gff) or die "Can't read $feature_gff\n";
+
+	while(my $line = <$in>){
+		chomp($line);
+		# skip GFF header lines
+		next if ($line =~ m/^#/);
+		
+		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
+
+		#  skip if not chr1 or chr4?
+		next unless (($chr eq 'Chr1') or ($chr eq 'Chr4'));
+
+		# skip tailswap regions of Chr1 and Chr4
+		next if ($chr eq 'Chr1' and $s > $chr_sizes{'Chr1'});
+		next if ($chr eq 'Chr4' and $s < $pre_tailswap_length);
+
+		$feature_count++;
+		
+		# add data to hash
+		$features{$feature_count}{'chr'}   = $chr;
+		$features{$feature_count}{'start'} = $s;
+		$features{$feature_count}{'end'}   = $e;
+
+	}
+	close($in);
+	return(%features);
 }
 
 1;
