@@ -316,74 +316,135 @@ For the genome as a whole, and for the 1x, 2x, and 3x regions of Chr1 and Chr4, 
 look to see what the levels of any genomic feature are:
 
 ```
-./determine_background_feature_enrichment.pl --feat GFF_files/all_TAIR10_features.gff --break GFF_files/FRAG00062.gff
+	./determine_background_feature_enrichment.pl --feat GFF_files/all_TAIR10_features.gff --break GFF_files/FRAG00062.gff
 
+	genome  CDS             33316212        27.96%
+	genome  DNA_replication_origin          4968965 4.17%
+	genome  DNAseI_hypersensitive_site              14889840        12.50%
+	genome  exon            50129588        42.07%
+	genome  five_prime_UTR          3147801 2.64%
+	genome  gene            60130895        50.47%
+	genome  mRNA            69108726        58.00%
+	genome  miRNA           40072   0.03%
+	genome  ncRNA           613554  0.51%
+	genome  open_chromatin_state_1          13187250        11.07%
+	genome  open_chromatin_state_2          11378100        9.55%
+	genome  open_chromatin_state_3          12019350        10.09%
+	genome  open_chromatin_state_4          17626350        14.79%
+	genome  open_chromatin_state_5          15961650        13.40%
+	genome  open_chromatin_state_6          11768100        9.88%
+	genome  open_chromatin_state_7          11772450        9.88%
+	genome  open_chromatin_state_8          10747500        9.02%
+	genome  open_chromatin_state_9          14685000        12.33%
+	genome  protein         51110375        42.90%
+	genome  pseudogene              1028312 0.86%
+	genome  pseudogenic_exon                879013  0.74%
+	genome  pseudogenic_transcript          1028312 0.86%
+	genome  rRNA            3944    0.00%
+	genome  satellite               7378520 6.19%
+	genome  snRNA           8491    0.01%
+	genome  snoRNA          7339    0.01%
+	genome  tRNA            43868   0.04%
+	genome  three_prime_UTR         4944280 4.15%
+	genome  transposable_element            23866665        20.03%
+	genome  transposable_element_gene               9412571 7.90%
+	genome  transposon_fragment             23276368        19.54%
 
-TYPE = genome
-	CDS occupies 28.0% of genome blocks
-	DNA_replication_origin occupies 4.2% of genome blocks
-	DNAseI_hypersensitive_site occupies 12.5% of genome blocks
-	exon occupies 42.1% of genome blocks
-	five_prime_UTR occupies 2.6% of genome blocks
-	gene occupies 50.5% of genome blocks
-	mRNA occupies 58.0% of genome blocks
-	miRNA occupies 0.0% of genome blocks
-	ncRNA occupies 0.5% of genome blocks
-	open_chromatin_state_1 occupies 11.1% of genome blocks
-	open_chromatin_state_2 occupies 9.5% of genome blocks
-	open_chromatin_state_3 occupies 10.1% of genome blocks
-	open_chromatin_state_4 occupies 14.8% of genome blocks
-	open_chromatin_state_5 occupies 13.4% of genome blocks
-	open_chromatin_state_6 occupies 9.9% of genome blocks
-	open_chromatin_state_7 occupies 9.9% of genome blocks
-	open_chromatin_state_8 occupies 9.0% of genome blocks
-	open_chromatin_state_9 occupies 12.3% of genome blocks
-	protein occupies 42.9% of genome blocks
-	pseudogene occupies 0.9% of genome blocks
-	pseudogenic_exon occupies 0.7% of genome blocks
-	pseudogenic_transcript occupies 0.9% of genome blocks
-	rRNA occupies 0.0% of genome blocks
-	satellite occupies 6.2% of genome blocks
-	snRNA occupies 0.0% of genome blocks
-	snoRNA occupies 0.0% of genome blocks
-	tRNA occupies 0.0% of genome blocks
-	three_prime_UTR occupies 4.1% of genome blocks
-	transposable_element occupies 20.0% of genome blocks
-	transposable_element_gene occupies 7.9% of genome blocks
-	transposon_fragment occupies 19.5% of genome blocks
-	
-TYPE = 1x
-	CDS occupies 30.6% of 1x blocks
-	DNA_replication_origin occupies 2.3% of 1x blocks
-	DNAseI_hypersensitive_site occupies 12.5% of 1x blocks
-	exon occupies 40.8% of 1x blocks
-	five_prime_UTR occupies 2.7% of 1x blocks
-	gene occupies 55.4% of 1x blocks
-	mRNA occupies 58.3% of 1x blocks
-	miRNA occupies 0.0% of 1x blocks
-	ncRNA occupies 0.5% of 1x blocks
-	open_chromatin_state_1 occupies 10.5% of 1x blocks
-	open_chromatin_state_2 occupies 10.0% of 1x blocks
-	open_chromatin_state_3 occupies 9.8% of 1x blocks
-	open_chromatin_state_4 occupies 18.7% of 1x blocks
-	open_chromatin_state_5 occupies 17.4% of 1x blocks
-	open_chromatin_state_6 occupies 11.5% of 1x blocks
-	open_chromatin_state_7 occupies 11.4% of 1x blocks
-	open_chromatin_state_8 occupies 8.0% of 1x blocks
-	open_chromatin_state_9 occupies 2.6% of 1x blocks
-	protein occupies 47.3% of 1x blocks
-	pseudogene occupies 0.9% of 1x blocks
-	pseudogenic_exon occupies 0.8% of 1x blocks
-	pseudogenic_transcript occupies 0.9% of 1x blocks
-	rRNA occupies 0.0% of 1x blocks
-	satellite occupies 5.0% of 1x blocks
-	snRNA occupies 0.0% of 1x blocks
-	snoRNA occupies 0.0% of 1x blocks
-	tRNA occupies 0.0% of 1x blocks
-	three_prime_UTR occupies 4.3% of 1x blocks
-	transposable_element occupies 13.7% of 1x blocks
-	transposable_element_gene occupies 3.5% of 1x blocks
-	transposon_fragment occupies 13.4% of 1x blocks        
+	1x      CDS             2636947 30.64%
+	1x      DNA_replication_origin          196512  2.28%
+	1x      DNAseI_hypersensitive_site              1074764 12.49%
+	1x      exon            3510277 40.78%
+	1x      five_prime_UTR          231602  2.69%
+	1x      gene            4764318 55.35%
+	1x      mRNA            5020785 58.33%
+	1x      miRNA           4257    0.05%
+	1x      ncRNA           46150   0.54%
+	1x      open_chromatin_state_1          907695  10.55%
+	1x      open_chromatin_state_2          856514  9.95%
+	1x      open_chromatin_state_3          846702  9.84%
+	1x      open_chromatin_state_4          1612968 18.74%
+	1x      open_chromatin_state_5          1500035 17.43%
+	1x      open_chromatin_state_6          992130  11.53%
+	1x      open_chromatin_state_7          983582  11.43%
+	1x      open_chromatin_state_8          687027  7.98%
+	1x      open_chromatin_state_9          220950  2.57%
+	1x      protein         4072368 47.31%
+	1x      pseudogene              74310   0.86%
+	1x      pseudogenic_exon                68994   0.80%
+	1x      pseudogenic_transcript          74310   0.86%
+	1x      rRNA            0       0.00%
+	1x      satellite               431066  5.01%
+	1x      snRNA           175     0.00%
+	1x      snoRNA          220     0.00%
+	1x      tRNA            3535    0.04%
+	1x      three_prime_UTR         372553  4.33%
+	1x      transposable_element            1177628 13.68%
+	1x      transposable_element_gene               303548  3.53%
+	1x      transposon_fragment             1151380 13.38%
+
+	2x      CDS             6022333 28.47%
+	2x      DNA_replication_origin          856315  4.05%
+	2x      DNAseI_hypersensitive_site              2812839 13.30%
+	2x      exon            8818414 41.69%
+	2x      five_prime_UTR          619332  2.93%
+	2x      gene            10836987        51.24%
+	2x      mRNA            12157720        57.48%
+	2x      miRNA           31223   0.15%
+	2x      ncRNA           159284  0.75%
+	2x      open_chromatin_state_1          2436038 11.52%
+	2x      open_chromatin_state_2          2186170 10.34%
+	2x      open_chromatin_state_3          2186831 10.34%
+	2x      open_chromatin_state_4          3096064 14.64%
+	2x      open_chromatin_state_5          2896544 13.69%
+	2x      open_chromatin_state_6          2258099 10.68%
+	2x      open_chromatin_state_7          2082797 9.85%
+	2x      open_chromatin_state_8          1736002 8.21%
+	2x      open_chromatin_state_9          2482576 11.74%
+	2x      protein         9191394 43.46%
+	2x      pseudogene              176177  0.83%
+	2x      pseudogenic_exon                163869  0.77%
+	2x      pseudogenic_transcript          176177  0.83%
+	2x      rRNA            26326   0.12%
+	2x      satellite               1474852 6.97%
+	2x      snRNA           26488   0.13%
+	2x      snoRNA          27922   0.13%
+	2x      tRNA            37825   0.18%
+	2x      three_prime_UTR         936147  4.43%
+	2x      transposable_element            3900552 18.44%
+	2x      transposable_element_gene               1421188 6.72%
+	2x      transposon_fragment             3798137 17.96%
+
+	3x      CDS             324740  34.20%
+	3x      DNA_replication_origin          43653   4.60%
+	3x      DNAseI_hypersensitive_site              172685  18.19%
+	3x      exon            414113  43.61%
+	3x      five_prime_UTR          33160   3.49%
+	3x      gene            572775  60.32%
+	3x      mRNA            591478  62.29%
+	3x      miRNA           3635    0.38%
+	3x      ncRNA           3534    0.37%
+	3x      open_chromatin_state_1          131759  13.88%
+	3x      open_chromatin_state_2          144053  15.17%
+	3x      open_chromatin_state_3          111564  11.75%
+	3x      open_chromatin_state_4          148408  15.63%
+	3x      open_chromatin_state_5          139260  14.67%
+	3x      open_chromatin_state_6          113576  11.96%
+	3x      open_chromatin_state_7          119057  12.54%
+	3x      open_chromatin_state_8          48820   5.14%
+	3x      open_chromatin_state_9          21285   2.24%
+	3x      protein         492033  51.82%
+	3x      pseudogene              6088    0.64%
+	3x      pseudogenic_exon                6088    0.64%
+	3x      pseudogenic_transcript          6088    0.64%
+	3x      rRNA            3534    0.37%
+	3x      satellite               48948   5.16%
+	3x      snRNA           3534    0.37%
+	3x      snoRNA          3534    0.37%
+	3x      tRNA            4114    0.43%
+	3x      three_prime_UTR         48485   5.11%
+	3x      transposable_element            82989   8.74%
+	3x      transposable_element_gene               22846   2.41%
+	3x      transposon_fragment             82121   8.65%
 ```
         
 So genes occupy about half of the genome.     
@@ -397,9 +458,8 @@ So genes occupy about half of the genome.
 If we define a 'breakpoint region' as a window of sequence around each breakpoint location
 (mapped to the reference genome), we can ask whether any genomic features are enriched
 in these breakpoint regions. E.g. take 1,000 bp around all breakpoints (potentially
-overlapping other breakpoints) and ask whether the total bp of a feature such as 'coding
-exons' is higher (as a percentage) *inside* those regions vs all DNA *outside* those
-regions.
+overlapping other breakpoints) and ask whether the total bp of a feature such as 'mRNA' 
+is higher (as a percentage) *inside* those regions vs all DNA *outside* those regions.
 
 Can try this for many different sizes of breakpoint region (100 bp up to 10,000 bp). In 
 this analysis certain GFF features (e.g. chromosome) are ignored. The final result is 
@@ -442,7 +502,7 @@ Run     Real_ratio      Bp      Feature Breakpoint_region_bp    Non_breakpoint_r
 0       0.4601  100     transposon_fragment     8957    30350564        671     7.49    4941706 16.28   0.4601  0       0       0
 ```
 
-The first set of columns of output are as follows:
+The columns of output are as follows:
 
 1. Run number (starts at 0 for unshuffled results)
 2. Real ratio from unshuffled data (the ratio of columns 6 & 7)
@@ -454,6 +514,11 @@ The first set of columns of output are as follows:
 8. %Inside 
 9. Feature_bp_outside      
 10. %Outside        
+11. Shuffled_ratio  
+12. Above (number of times column 11 exceeds column 2)
+13. Same (number of times column 11 equals column 2)   
+14. Below (number of times column 11 is below column 2)
+15. Asterisks (to denote levels of significance)
 
 To assess the significance of these ratios, I perform shuffling experiments to see whether 
 we see similar ratios when we randomize the location of all of the breakpoints 
@@ -468,15 +533,8 @@ E.g. if you want to see how significant the above observed enrichment ratio for 
 ./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062.gff  --feature_gff GFF_files/genes.gff --bp 100 --shuffles 1000
 ```
 
-You should now note the final four columns of output:
-
-11. Shuffled_ratio  
-12. Above (number of times column 9 exceeds column 2)
-13. Same (number of times column 9 equals column 2)   
-14. Below (number of times column 9 is below column 2)
-
-There will also be rows of output generated for each shuffle run. Just want to really look
-at first run (run = 0) and last run in file:
+There will be 30 rows of output — one for each feature — generated for each shuffling run. 
+Just want to really look at first run (run = 0) and last run in file. E.g. for genes:
 
 	Run     Real_ratio      Bp      Feature Breakpoint_region_bp    Non_breakpoint_region_bp        Feature_bp_inside       %Inside Feature_bp_outside      %Outside        Shuffled_ratio  Above   Same    Below
 	0       1.1497  100     gene    8957    30350564        5428    60.60   15998341        52.71   1.1497  0       0       0
