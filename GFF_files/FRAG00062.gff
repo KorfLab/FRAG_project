@@ -105,7 +105,7 @@ Chr1	PRICE	chromosome_breakpoint	22085046	22085046	.	.	.	ID=breakpoint0066;Paren
 Chr1	t_test.pl	copy_number_gain	23652500	24962860	.	+	.	ID=block0034;Name=18a1_18a2;Note="duplicated block"
 Chr1	PRICE	chromosome_breakpoint	23652500	23652500	.	.	.	ID=breakpoint0067;Parent=block0034;Name=18a1;Note="still unpaired"
 Chr1	PRICE	chromosome_breakpoint	24962860	24962860	.	-	.	ID=breakpoint0068;Parent=block0034;Name=18a2;Note= "paired with breakpoint0024"
-Chr1	t_test.pl	copy_number_gain	24966500	24992825	.	+	.	ID=block0035;Name=18b1_18b2;Note="duplicated block"
+Chr1	t_test.pl	copy_number_gain	24966500	24992825	.	+	.	ID=block0035;Name=18b1_18b2;Note="triplicated block"
 Chr1	PRICE	chromosome_breakpoint	24966500	24966500	.	+	.	ID=breakpoint0069;Parent=block0035;Name=18b1;Note="paired with breakpoint0023"
 Chr1	PRICE	chromosome_breakpoint	24992825	24992825	.	.	.	ID=breakpoint0070;Parent=block0035;Name=18b2;Note="still unpaired"
 Chr1	t_test.pl	copy_number_gain	24998839	25018114	.	+	.	ID=block0036;Name=18c1_18c2;Note="triplicated block"
