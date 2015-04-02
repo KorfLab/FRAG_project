@@ -68,12 +68,10 @@ my %breakpoints = FRAG::read_breakpoint_data($breakpoint_gff);
 # read features, 
 my %features = FRAG::read_feature_data($feature_gff);
 
-# hash that will just store two distances:
-# distance to nearest feature before & after tailswap region
-my %features_near_tailswap;
 
-
-
+# hashe that will just store distances and IDs:
+# of nearest features and breakpoints before & after tailswap region
+my %tailswap_details;
 
 ####################################
 #
@@ -82,7 +80,15 @@ my %features_near_tailswap;
 ####################################
 
 my $real_average_distance;
+my @real_distances;
 my @shuffled_averages;
+
+my $exception_counter1 = 0;
+my $exception_counter2 = 0;
+
+
+# work out distance of last Chr1 $target_feature before tailswap and distance of first Chr4 $target_feature after tailswap
+find_features_near_tailswap();
 
 # need to do one master run and then a number of shuffles to test significance (as denoted by $shuffles)
 for (my $i = 0; $i <= $shuffles; $i++){
@@ -93,12 +99,12 @@ for (my $i = 0; $i <= $shuffles; $i++){
 
 	} else{
 		warn "Shuffle $i\n";	
-		# need to shuffle location of features
-		shuffle_features();
+
+		# need to shuffle location of breakpoints
+		shuffle_breakpoints();
 	}
 
-	# work out distance of last Chr1 $target_feature before tailswap and distance of first Chr4 $target_feature after tailswap
-	find_features_near_tailswap();
+	find_breakpoints_near_tailswap();
 
 	# can now process breakpoints
 	process_breakpoints($i);
@@ -108,15 +114,27 @@ for (my $i = 0; $i <= $shuffles; $i++){
 print "\n";
 print "REAL: Average distance to nearest $target_feature = $real_average_distance bp\n";
 my @sorted_averages = sort {$a <=> $b} @shuffled_averages;
-print "SHUFFLED: @sorted_averages\n\n";
+#print "SHUFFLED: @sorted_averages\n\n";
 
+open(my $out, ">", "shuffled_distances.txt") or die "can't write output file\n";
 my $lower = 0;
-foreach my $d (@shuffled_averages){
+foreach my $d (@sorted_averages){
 	$lower++ if ($d < $real_average_distance);
+	print $out "$d\n";
 }
+
+close($out);
+
+open($out, ">", "real_distances.txt") or die "can't write output file\n";
+foreach my $d (sort {$a <=> $b} @real_distances){
+	print $out "$d\n";
+}
+close($out);
 
 print "Shuffled datasets produced lower average distance than real average distance $lower times out of $shuffles\n\n";
 
+print "There were $exception_counter1 instances of nearest feature being *after* tailswap\n";
+print "There were $exception_counter2 instances of nearest feature being *before* tailswap\n";
 exit;
 
 
@@ -154,75 +172,125 @@ sub process_breakpoints{
 
 		FEATURE: foreach my $feat (sort {$a <=> $b} keys %features){ 
 			my $f_chr = $features{$feat}{'chr'};
-			my $s   = $features{$feat}{'start'};
-			my $e   = $features{$feat}{'end'};
+			my $s     = $features{$feat}{'start'};
+			my $e     = $features{$feat}{'end'};
+
+			# apart from the possible issue of the features next to tailswap region,
+			# don't need to look at current feature if on a different chromosome
+			next FEATURE unless ($f_chr eq $b_chr);
 
 			# can skip to the last feature we looked at for previous breakpoint
 			next FEATURE if ($feat < $last_feature_before_breakpoint);
 
-			next FEATURE if ($f_chr ne $b_chr);
-
-
+			
 			# first check to see whether breakpoint overlaps with the current feature
 			# if so we can just skip to the next breakpoint and declare a distance of 0 bp
-			if (($f_chr eq $b_chr) and ($b_pos >= $s) and ($b_pos <= $e)){
-				print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\tDistance = 0\t*\n\n";
+			if (($b_pos >= $s) and ($b_pos <= $e)){
+				print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\tDistance = 0\t*\n" if ($verbose);
 				push(@distances, 0);
 				$last_feature_before_breakpoint = $feat - 1;
 				next BREAKPOINT;
 			} 
 
-			# breakpoint doesn't overlap feature, so calculate distance
-			my $distance;
-			if ($f_chr eq $b_chr and ($b_pos < $s)){ # same chromosome, breakpoint is before feature
-				$distance = $s - $b_pos;
-			} elsif ($f_chr eq $b_chr and ($b_pos > $e)){ # same chromosome, breakpoint is after feature
-				$distance = $b_pos - $e;
-			} else{
-				print "Uh oh 1: shouldn't get here! feat_chr = $f_chr $s-$e\n";
 
+			# Now we know that current breakpoint doesn't overlap current feature, so calculate distance
+			my $distance;
+
+			# Is the current feature before or after the breakpoint
+			if ($b_pos < $s){ 
+				$distance = $s - $b_pos;
+			} else{
+				$distance = $b_pos - $e;
 			}
 
-
-			#print "BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\t$distance\t$distance_to_nearest_feature\tSkip = $skip_count\n" unless ($shuffle == 0);
+			#print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\tD=$distance\tDTN=$distance_to_nearest_feature\tSkip = $skip_count\n";
 
 			# is the current distance closer than previous best?
 			if ($distance < $distance_to_nearest_feature){
 				$distance_to_nearest_feature = $distance;
+				#print "\tnew nearest distance!\n" if ($verbose);
 				$nearest_feature = $feat;
 				$nearest_chr = $f_chr;
 				$nearest_start = $s;
 				$nearest_end = $e;
 				$last_feature_before_breakpoint = $feat - 1;
 				$skip_count = 0;
+			} elsif((($s >= $nearest_start) and ($s <= $nearest_end)) or
+					(($e >= $nearest_start) and ($e <= $nearest_end))){
+				# check for overlapping features (e.g. gene inside gene, or nested repeats)
+				# if features overlap, then we don't really mind that the the current distance
+				# exceeds the nearest distance. Just move along to next feature on chromosome
+				next FEATURE;
 			} else{
-				# must be going further away, but could have something strange like gene inside genes (especially with shuffling)
-				# will allow looking at up to 20 more genes
+				# must be going further away, but maybe annotations are not in coordinate order for some reason?
+				# will allow looking at up to 5 more features to be sure that the $distance_to_nearest_feature
+				# is the best distance possible
 				$skip_count++;
-				last if ($skip_count > 20);
+				last if ($skip_count > 5);
+			}
+
+
+			# Next check whether this is the last breakpoint before the tailswap		
+			# *and* the last feature before the tailswap
+			if ($feat       eq $tailswap_details{'feature_before'}{'id'} and
+				$breakpoint eq $tailswap_details{'breakpoint_before'}{'id'}){
+				
+				# set the nearest possible feature to be the first feature following the tailswap
+				# but only if we haven't already seen a feature that's closer
+				print "\n*BEFORE TAILSWAP*\n" if ($verbose); 
+				my $distance_to_post_tailswap_feature = $chr_sizes{'Chr1'} - $b_pos + $tailswap_details{'feature_after'}{'distance'};
+				print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\t" if ($verbose);
+				print "Distance = $distance_to_nearest_feature\tDistance to post-tailswap feature = $distance_to_post_tailswap_feature\n" if ($verbose);		
+				if ($distance_to_post_tailswap_feature < $distance_to_nearest_feature){
+					
+					$distance_to_nearest_feature = $distance_to_post_tailswap_feature;
+					$nearest_feature = $tailswap_details{'feature_after'}{'id'};
+					$nearest_start   = $tailswap_details{'feature_after'}{'s'};
+					$nearest_end     = $tailswap_details{'feature_after'}{'e'};
+					$nearest_chr     = 'Chr4';
+					$skip_count = 0;
+					print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\tDistance = $distance_to_nearest_feature\n" if ($verbose);
+					$exception_counter1++;
+				}
+				print "\n" if ($verbose);
+			}
+
+
+			# Now check whether this is the first breakpoint after the tailswap 
+			# and the first feature after the tailswap
+			if ($feat       eq $tailswap_details{'feature_after'}{'id'} and
+				$breakpoint eq $tailswap_details{'breakpoint_after'}{'id'}){
+				print "\n*AFTER TAILSWAP*\n"  if ($verbose);
+				my $distance_to_pre_tailswap_feature = $b_pos - $pre_tailswap_length + $tailswap_details{'feature_before'}{'distance'};
+				print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\t"  if ($verbose);
+				print "Distance = $distance_to_nearest_feature\tDistance to pre-tailswap feature = $distance_to_pre_tailswap_feature\n"  if ($verbose);
+		
+				if ($distance_to_pre_tailswap_feature < $distance_to_nearest_feature){
+
+					# set the nearest possible feature to be the last feature preceding the tailswap
+					$distance_to_nearest_feature = $distance_to_pre_tailswap_feature;
+					$nearest_feature = $tailswap_details{'feature_before'}{'id'};				
+					$nearest_start = $tailswap_details{'feature_before'}{'s'};
+					$nearest_end = $tailswap_details{'feature_before'}{'e'};
+					$nearest_chr = 'Chr1';
+					$last_feature_before_breakpoint = $feat - 1;
+					$skip_count = 0;
+					print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $feat: $f_chr $s-$e\tDistance = $distance_to_nearest_feature\n"  if ($verbose);
+					
+					$exception_counter2++;
+					#exit unless ($shuffle == 0);
+				}
+				print "\n" if ($verbose);
 			}
 		}
-		print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $nearest_feature: $nearest_chr $nearest_start-$nearest_end\tDistance = $distance_to_nearest_feature\t**\n";
+
+		print "SHUFFLE $shuffle: BREAKPOINT $breakpoint: $b_chr $b_pos\t$target_feature $nearest_feature: $nearest_chr $nearest_start-$nearest_end\tDistance = $distance_to_nearest_feature\t**\n" if ($verbose);
 		push(@distances, $distance_to_nearest_feature);
-		# could we be looking at a breakpoint where the nearest feature is actually after the tailswap
-		# region? I.e. on the other chromosome of the reference genome?
-
-		if($nearest_chr eq 'Chr1'){
-			my $distance_to_end_of_chr = $chr_sizes{'Chr1'} - $nearest_end;
-			my $distance_to_post_tailswap_feature = $distance_to_end_of_chr + $features_near_tailswap{'after'};
-			print "\tDistance to nearest feature on same chromosome = $distance_to_nearest_feature\n";
-			print "\tDistance to nearest feature after tailswap = $distance_to_post_tailswap_feature\n\n";	
-			die "Uh oh 2!\n" if ($distance_to_post_tailswap_feature < $distance_to_nearest_feature);
-		} else{
-			my $distance_to_pre_tailswap_feature = $nearest_start - $pre_tailswap_length + $features_near_tailswap{'before'};
-			print "\tDistance to nearest feature on same chromosome = $distance_to_nearest_feature\n";
-			print "\tDistance to nearest feature before tailswap = $distance_to_pre_tailswap_feature\n\n";	
-			die "Uh oh 3!\n" if ($distance_to_pre_tailswap_feature < $distance_to_nearest_feature);
-
-		}
 	}
 
-	print "\n\nDISTANCES: @distances\n";
+	my @sorted_distances = sort {$a <=> $b} @distances;
+	
+	print "\n\nDISTANCES: @sorted_distances\n";
 	my $n = @distances;
 	my $average_distance = sprintf("%.1f", sum(@distances) / $n);
 
@@ -231,6 +299,7 @@ sub process_breakpoints{
 	# store results
 	if ($shuffle == 0){
 		$real_average_distance = $average_distance;	
+		@real_distances = @distances;
 	} else{
 		push(@shuffled_averages, $average_distance);
 	}
@@ -239,8 +308,11 @@ sub process_breakpoints{
 sub find_features_near_tailswap{
 
 	# reset hash details with some default values
-	$features_near_tailswap{'before'} = 1000000;
-	$features_near_tailswap{'after'}  = 1000000;
+	$tailswap_details{'feature_before'}{'id'} = "";
+	$tailswap_details{'feature_before'}{'distance'} = 10000000;
+	$tailswap_details{'feature_after'}{'id'} = "";
+	$tailswap_details{'feature_after'}{'distance'} = 10000000;
+	
 
 	foreach my $feat (sort {$a <=> $b} keys %features){ 
 
@@ -248,29 +320,97 @@ sub find_features_near_tailswap{
 		my $s   = $features{$feat}{'start'};
 		my $e   = $features{$feat}{'end'};
 
-#		print "$feat $chr $s-$e\t$chr_sizes{'Chr1'}\t$pre_tailswap_length\n";
-
 		# want to see if this feature is closer to the tailswap region than
-		# any previous feature, if so store the distance. Do this for 
+		# any previous feature, if so store the distance and gene ID. Do this for 
 		# features on chr1 *before* the tailswap, and features on chr4 *after* the tailswap
-		if ($chr eq 'Chr1' and $e < $chr_sizes{'Chr1'}){
+		if ($chr eq 'Chr1' and $s < $chr_sizes{'Chr1'}){		
 			my $distance = $chr_sizes{'Chr1'} - $e;
-			($features_near_tailswap{'before'} = $distance) if ($distance < $features_near_tailswap{'before'});
+			
+			# special case of feature that might span tailswap region
+			$distance = 0 if ($e > $chr_sizes{'Chr1'});
+			
+			if ($distance < $tailswap_details{'feature_before'}{'distance'}){
+				$tailswap_details{'feature_before'}{'distance'} = $distance;
+				$tailswap_details{'feature_before'}{'id'} = $feat;
+				$tailswap_details{'feature_before'}{'s'} = $s;
+				$tailswap_details{'feature_before'}{'e'} = $e;
+			}
 		}
 		
-		if ($chr eq 'Chr4' and $s > $pre_tailswap_length){
+		if ($chr eq 'Chr4' and $e > $pre_tailswap_length){
 			my $distance = $s - $pre_tailswap_length;
-			($features_near_tailswap{'after'} = $distance) if ($distance < $features_near_tailswap{'after'});
+			
+			# special case of feature that might span tailswap region
+			$distance = 0 if ($s < $pre_tailswap_length);
+			if ($distance < $tailswap_details{'feature_after'}{'distance'}){
+				
+				$tailswap_details{'feature_after'}{'distance'} = $distance;
+				$tailswap_details{'feature_after'}{'id'} = $feat;
+				$tailswap_details{'feature_after'}{'s'} = $s;
+				$tailswap_details{'feature_after'}{'e'} = $e;
+			}
 		}
 
 	}
 
 	print "\n";
-	print "Distance of nearest $target_feature *after* tailswap on Chr4: $features_near_tailswap{'after'}\n";
-	print "Distance of nearest $target_feature *before* tailswap on Chr1: $features_near_tailswap{'before'}\n";
+	print "Nearest $target_feature *before* tailswap on Chr1: ID = $tailswap_details{'feature_before'}{'id'}, ";
+	print "$tailswap_details{'feature_before'}{'s'}-$tailswap_details{'feature_before'}{'e'}, ";
+	print "Distance = $tailswap_details{'feature_before'}{'distance'} bp\n";
+
+	print "Nearest $target_feature *after* tailswap on Chr4:  ID = $tailswap_details{'feature_after'}{'id'}, ";
+	print "$tailswap_details{'feature_after'}{'s'}-$tailswap_details{'feature_after'}{'e'}, ";
+	print "Distance = $tailswap_details{'feature_after'}{'distance'} bp\n";
 	print "\n";
 	
+}
 
+
+sub find_breakpoints_near_tailswap{
+
+	# when we shuffle data, we want to keep track of what is the last breakpoint
+	# before the tailswap, and the first breakpoint after the tailswap
+
+	# reset hash details with some default values
+	$tailswap_details{'breakpoint_before'}{'id'} = "";
+	$tailswap_details{'breakpoint_before'}{'distance'} = 100000000;
+	$tailswap_details{'breakpoint_after'}{'id'} = "";
+	$tailswap_details{'breakpoint_after'}{'distance'} = 100000000;
+	
+
+	foreach my $bp (sort {$a <=> $b} keys %breakpoints){ 
+
+		my $chr = $breakpoints{$bp}{'chr'};
+		my $pos = $breakpoints{$bp}{'pos'};
+		
+
+		# want to see if this feature is closer to the tailswap region than
+		# any previous feature, if so store the distance and gene ID. Do this for 
+		# features on chr1 *before* the tailswap, and features on chr4 *after* the tailswap
+		if ($chr eq 'Chr1' and $pos <= $chr_sizes{'Chr1'}){
+			my $distance = $chr_sizes{'Chr1'} - $pos;
+			
+			if ($distance < $tailswap_details{'breakpoint_before'}{'distance'}){
+				$tailswap_details{'breakpoint_before'}{'distance'} = $distance;
+				$tailswap_details{'breakpoint_before'}{'id'} = $bp;
+			}
+		}
+		
+		if ($chr eq 'Chr4' and $pos >= $pre_tailswap_length){
+			my $distance = $pos - $pre_tailswap_length;
+
+			if ($distance < $tailswap_details{'breakpoint_after'}{'distance'}){
+				$tailswap_details{'breakpoint_after'}{'distance'} = $distance;
+				$tailswap_details{'breakpoint_after'}{'id'} = $bp;
+			}
+		}
+
+	}
+
+	print "\n";
+	print "Nearest breakpoint *before* tailswap on Chr1: ID = $tailswap_details{'breakpoint_before'}{'id'}, distance = $tailswap_details{'breakpoint_before'}{'distance'} bp\n";
+	print "Nearest breakpoint *after* tailswap on Chr4:  ID = $tailswap_details{'breakpoint_after'}{'id'}, distance = $tailswap_details{'breakpoint_after'}{'distance'} bp\n";
+	print "\n";
 }
 
 ###############################################################
@@ -349,7 +489,41 @@ sub shuffle_features{
 }
 
 
+sub shuffle_breakpoints{
 
+	# will use temp arrays to store shuffled breakpoint coordinates before reassigning to hash
+	my @tmp_chr1;
+	my @tmp_chr4;
 
+	foreach my $breakpoint (keys %breakpoints){
+		
+		# choose random position anywhere between length of sequence representing
+		# chr1 (pre-tailswap) + region on chr4 after tailswap
+		# have to factor in size of $bp as will need to extract a window either side 
+		# of breakpoint
+		
+		my $max_coord = $chr_sizes{'Chr1'} + ($chr_sizes{'Chr4'} - $pre_tailswap_length + 1);
+		my $random_coord = int(rand($max_coord));
+		
+		# add feature to chr1 or chr4 temp hash
+		if ($random_coord < $chr_sizes{'Chr1'}){
+			push(@tmp_chr1, $random_coord);		
+		} else{
+			# need to change any breakpoint on chr4 to use chr coordinate ranges
+			my $adjusted_coord = $random_coord - $chr_sizes{'Chr1'}  + $pre_tailswap_length;
+			push(@tmp_chr4, $adjusted_coord);
+		}	
+	}
 
-
+	my $breakpoint_counter = 0;
+	foreach my $pos (sort {$a <=> $b} @tmp_chr1){
+		$breakpoint_counter++;
+		$breakpoints{$breakpoint_counter}{chr} = 'Chr1';
+		$breakpoints{$breakpoint_counter}{pos} = $pos;
+	}
+	foreach my $pos (sort {$a <=> $b} @tmp_chr4){
+		$breakpoint_counter++;
+		$breakpoints{$breakpoint_counter}{chr} = 'Chr4';
+		$breakpoints{$breakpoint_counter}{pos} = $pos;
+	}
+}

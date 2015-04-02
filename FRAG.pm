@@ -24,7 +24,8 @@ my %breakpoints;
 # where does the tail swap begin on Chr4?
 # this is needed for only analyzing first 4/5ths (ish) of Chr1 and just tailswap region
 # of Chr4
-my $pre_tailswap_length = 16541500; # coordinate from Han
+my $pre_tailswap_length = 16499775; # coordinate from Han
+
 
 ####################################
 # Set up chromosome data
@@ -44,7 +45,7 @@ sub get_chromosome_lengths{
 	# do we want tailswap coordinates for chr1 (truncates the length for analysis
 	# purposes)
 	if ($tailswap){
-		$chr_sizes{'Chr1'} = 28315915; # coordinate from Han
+		$chr_sizes{'Chr1'} = 28314971; # coordinate from Han
 	}
 	return %chr_sizes;
 }
@@ -244,25 +245,40 @@ sub read_feature_data{
 
 	while(my $line = <$in>){
 		chomp($line);
+		
 		# skip GFF header lines
 		next if ($line =~ m/^#/);
 		
 		my ($chr, undef, $feature, $s, $e, undef, undef, undef, $comment) = split(/\t/, $line);	
 
+		# skip non-protein-coding genes?
+		if ($feature eq 'gene' and $comment !~ m/protein_coding_gene/){
+			#print "Skipping: $feature $comment\n";
+			next;
+		}
+
 		#  skip if not chr1 or chr4?
 		next unless (($chr eq 'Chr1') or ($chr eq 'Chr4'));
 
-		# skip tailswap regions of Chr1 and Chr4
+		# skip pre/post tailswap regions of Chr1 and Chr4
 		next if ($chr eq 'Chr1' and $s > $chr_sizes{'Chr1'});
-		next if ($chr eq 'Chr4' and $s < $pre_tailswap_length);
+		next if ($chr eq 'Chr4' and $e < $pre_tailswap_length);
+
+		# If this is a feature that flanks the tailswap region, we might want to
+		# change the start/end coordinate respectively
+		if ($chr eq 'Chr1' and $s < $chr_sizes{'Chr1'} and $e > $chr_sizes{'Chr1'}){
+			$e = $chr_sizes{'Chr1'};
+		}
+		if ($chr eq 'Chr4' and $s < $pre_tailswap_length and $e > $pre_tailswap_length){
+			$s = $pre_tailswap_length;			
+		}
 
 		$feature_count++;
-		
+
 		# add data to hash
 		$features{$feature_count}{'chr'}   = $chr;
 		$features{$feature_count}{'start'} = $s;
 		$features{$feature_count}{'end'}   = $e;
-
 	}
 	close($in);
 	return(%features);

@@ -110,9 +110,11 @@ BREAKPOINT: foreach my $breakpoint (sort {$a <=> $b} keys %breakpoints){
 			$feature = "open_chromatin_state_${state}";
 		}
 
-
+		no warnings;
 		# only want to look features on our list
 		next unless ($feature ~~ @target_gff_features);
+		use warnings FATAL => 'all';
+		
 
 		# can now ask where current GFF feature overlaps current breakpoint
 		my $overlap = check_for_overlap($qs, $qe, $ss, $se);
