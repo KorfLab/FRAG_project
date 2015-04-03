@@ -542,7 +542,7 @@ E.g. set up lots of runs with a bash script:
 ```bash
 #!/bin/bash
 
-for i in 100 1000 10000;
+for i in 100 1000 5000 10000;
 do
 	echo "./overlap_between_two_gff_files.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/subset_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_2x_${i}bp_S1000.tsv \& ";
 	./overlap_between_two_gff_files.pl       --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/subset_TAIR10_features.gff --verbose --bp $i --shuffles 1000 > Results/FRAG00062_2x_${i}bp_S1000.tsv \& 
@@ -803,3 +803,53 @@ The y-axes on all plots show a 25% range, in order to facilitate comparison betw
 
 #### Supplemental plot 2: 16 different features, window = 2,000 bp ####
 ![](Results/breakpoint_analysis_supplemental_figure_2000_200.png)
+
+
+
+### Complementary approach ###
+
+Luca had an idea to look at the same problem from a different angle. If any feature is enriched near breakpoints then we might expect that the 'average-distance-from-breakpoint-to-nearest-feature' will be much lower than when we randomize all of the breakpoints.
+
+E.g. for duplicated blocks, genes are (on average) 598 bp away from the nearest breakpoint (standard deviation is 1,936 bp). When you randomize the breakpoint locations you mostly end up moving genes further away from breakpoints. So if you shuffle 100 times, you might see an shuffled average distance that is lower than the real average distance only 1 time in 100 (P <= 0.01).
+
+I wrote a script that calculates this and generates results from shufflings as well as storing the real set of 'distances-to-nearest-feature' as well as all of the average distances from shuffling (we can use these two distributions for plotting).
+
+This is all done with yet another new script which works like so:
+
+```bash
+./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_2x.gff --feature GFF_files/genes.gff  --shuffles 10
+
+Run	Copy_number	Feature	Average_distance_to_nearest_feature	Standard_deviation	#_of_times_shuffled_average_was_below_real_average
+0	2x	gene	597.6	1935.7	.
+1	2x	gene	4436.9	13573.6	0
+2	2x	gene	3945.3	7716.9	0
+3	2x	gene	3490.5	13194.8	0
+4	2x	gene	967.6	3589.5	0
+5	2x	gene	711.1	2018.4	0
+6	2x	gene	1266.4	3140.3	0
+7	2x	gene	3487.4	14462.9	0
+8	2x	gene	8106.2	29525.7	0
+9	2x	gene	3424.4	9593.9	0
+10	2x	gene	3275.7	15834.4	0
+
+REAL: Average distance to nearest gene = 597.6 bp (std dev = 1935.7)
+Shuffled datasets produced lower average distance than real average distance 0 times out of 10
+```
+
+Need to run this for each of the features we are interested in using a wrapper script:
+
+```
+#!/bin/bash
+
+for i in DHS genes state1 state2 state3 state4 state5 state6 state7 state8 state9  pseudogene satellite transposable_element;
+
+do
+	echo "./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_2x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_2x_distance_data_${i}.tsv";
+	
+	./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_2x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_2x_distance_data_${i}.tsv
+	
+	echo "./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_3x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_3x_distance_data_${i}.tsv";
+	
+	./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_3x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_3x_distance_data_${i}.tsv
+
+done
