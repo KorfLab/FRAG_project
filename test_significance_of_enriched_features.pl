@@ -377,7 +377,6 @@ sub find_features_near_tailswap{
 
 	}
 
-	print "\n";
 	if ($verbose){
 		warn "Nearest $target_feature *before* tailswap on Chr1: ID = $tailswap_details{'feature_before'}{'id'}, ";
 		warn "$tailswap_details{'feature_before'}{'s'}-$tailswap_details{'feature_before'}{'e'}, " ;

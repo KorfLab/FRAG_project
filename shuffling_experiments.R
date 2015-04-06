@@ -1,177 +1,127 @@
 
+# Plotting average distance of various genomic features to the nearest
+# breakpoint (edge of duplicated or triplicated block), and then comparing
+# this to a distribution of average distances that might occur if we shuffled 
+# the locations of the breakpoints 1,000 times.
 
-### FIXED DATA ###
+# make large bottom outer margin
+par(mar=c(0,2.5,1.5,2), oma=c(6,3,1,1))
 
-# 2x state2 data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_state2.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_2x_state2.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,75000), breaks=50, col="red", main="Chromatin state 2 at duplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=2778, lwd=3, col="blue")
-legend(50000,45, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
 
-# 3x state2 data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_state2.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_3x_state2.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,75000), breaks=50, col="red", main="Chromatin state 2 at triplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=2064, lwd=3, col="blue")
-legend(50000,45, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+# set out a layout of select features
+m = c(1, 2, 17, 3,4, 16, 5,6, 15, 7,8, 14, 9,10, 13, 11,12, 18)
+pp <- layout(matrix(m, 6,3, byrow=F), height = c(4, 4, 4, 4, 4, 3))
+layout.show(pp)
 
-# state2 data 2x vs 3x
-data_2x = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_state2.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data_3x = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_state2.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data_2x$V1, xlim=c(0,75000), breaks=50, col="red", main="Chromatin state 2", xlab="Average distance to nearest breakpoint")
-hist(data_3x$V1, xlim=c(0,95000), breaks=50, col=rgb(0, 0, 1, 0.5), add=T)
-abline(v=2778, lwd=3, col="red")
-abline(v=2064, lwd=3, col="blue")
-legend(50000,50, c("2x","3x"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+
+# 2x gene data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_2x_gene.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_2x_gene.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,10000), ylim=c(0,80), breaks=50, col="red", main="Genes", xaxt='n', xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
+
+# 3x genes data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_3x_gene.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_3x_gene.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,10000), ylim=c(0,80), breaks=50, col="blue", main=NA, xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
+
+
+
+# 2x state1 data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_2x_open_chromatin_state_1.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_2x_open_chromatin_state_1.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,75000), ylim=c(0,80), breaks=50, col="red", main="Chromatin state 1", xaxt='n', xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
+
+# 3x state1 data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_3x_open_chromatin_state_1.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_3x_open_chromatin_state_1.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,75000), ylim=c(0,80), breaks=50, col="blue", main=NA, xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
+
 
 
 # 2x state3 data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_state3.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_2x_state3.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,95000), breaks=50, col="red", main="Chromatin state 3 at duplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=3176, lwd=3, col="blue")
-legend(65000,60, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_2x_open_chromatin_state_3.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_2x_open_chromatin_state_3.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,75000), ylim=c(0,80), breaks=50, col="red", main="Chromatin state 3", xaxt='n', xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
 # 3x state3 data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_state3.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_3x_state3.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,95000), breaks=50, col="red", main="Chromatin state 3 at triplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=4242, lwd=3, col="blue")
-legend(65000,60, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
-
-# state3 data 2x vs 3x
-data_2x = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_state3.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data_3x = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_state3.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data_2x$V1, xlim=c(0,95000), breaks=50, col="red", main="Chromatin state 3", xlab="Average distance to nearest breakpoint")
-hist(data_3x$V1, xlim=c(0,95000), breaks=50, col=rgb(0, 0, 1, 0.5), add=T)
-abline(v=3176, lwd=3, col="red")
-abline(v=4242, lwd=3, col="blue")
-legend(75000,60, c("2x","3x"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_3x_open_chromatin_state_3.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_3x_open_chromatin_state_3.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,75000), ylim=c(0,80), breaks=50, col="blue", main=NA, xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
 
+# 2x state6 data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_2x_open_chromatin_state_6.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_2x_open_chromatin_state_6.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,35000), ylim=c(0,80), breaks=50, col="red", main="Chromatin state 6", xaxt='n', xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
-# 2x DHS data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_DHS.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_2x_DHS.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,25000), breaks=50, col="red", main="DHS at duplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=1313, lwd=3, col="blue")
-legend(18000,70, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+# 3x state6 data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_3x_open_chromatin_state_6.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_3x_open_chromatin_state_6.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,35000), ylim=c(0,80), breaks=50, col="blue", main=NA, xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
-# 3x DHS data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_DHS.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_3x_DHS.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,25000), breaks=50, col="red", main="DHS at triplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=1556, lwd=3, col="blue")
-legend(18000,70, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
 
-# DHS data 2x vs 3x
-data_2x = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_DHS.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data_3x = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_DHS.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data_2x$V1, xlim=c(0,25000), breaks=50, col="red", main="DHS", xlab="Average distance to nearest breakpoint")
-hist(data_3x$V1, xlim=c(0,25000), breaks=50, col=rgb(0, 0, 1, 0.5), add=T)
-abline(v=1313, lwd=3, col="red")
-abline(v=1556, lwd=3, col="blue")
-legend(18000,70, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+# 2x transposable element data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_2x_transposable_element.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_2x_transposable_element.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,12000), ylim=c(0,80), breaks=50, col="red", main="Transposable elements", xaxt='n', xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
+
+# 3x transposable elements data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_3x_transposable_element.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_3x_tr", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,12000), ylim=c(0,80), breaks=50, col="blue", main=NA, xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
 
 
 # 2x origin data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_2x_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,80000), breaks=50, col="red", main="Replication origins at duplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=51408, lwd=3, col="blue")
-legend(58000,55, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_2x_replication_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_2x_replication_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,70000), ylim=c(0,80), breaks=50, col="red", main="Replication origins", xaxt='n', xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
-# 3x origins data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_3x_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,80000), breaks=50, col="red", main="Replication origins at triplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=38386, lwd=3, col="blue")
-legend(58000,55, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+# 3x origin data
+real_data = read.table("~/Work/Code/FRAG_project/Results/real_distances_3x_replication_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+real_mean = mean(real_data$V1)
+shuffled_data = read.table("~/Work/Code/FRAG_project/Results/shuffled_distances_3x_replication_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
+hist(shuffled_data$V1, xlim=c(0,70000), ylim=c(0,80), breaks=50, col="blue", main=NA, xlab=NA, ylab=NA)
+abline(v=real_mean, lwd=2, col="black")
 
-# origins data 2x vs 3x
-data_2x = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data_3x = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_origins.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data_2x$V1, xlim=c(0,80000), breaks=50, col="red", main="Replication origins", xlab="Average distance to nearest breakpoint")
-hist(data_3x$V1, xlim=c(0,80000), breaks=50, col=rgb(0, 0, 1, 0.5), add=T)
-abline(v=51408, lwd=3, col="red")
-abline(v=38386, lwd=3, col="blue")
-legend(58000,55, c("2x","3x"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+# Add series labels
+mtext("Average distance of feature to nearest breakpoint", side=1, outer=T, at=0.5, cex=1.2)
+mtext("Frequency", side=2, outer=T, at=0.5, cex=1.2)
 
 
 
-# 2x pseudogene data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_2x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,250000), breaks=50, col="red", main="Pseudogenes at duplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=71393, lwd=3, col="blue")
-legend(180000,65, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
-
-# 3x pseudogenes data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_3x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,250000), breaks=50, col="red", main="Pseudogenes at triplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=146582, lwd=3, col="blue")
-legend(180000,65, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
-
-# pseudogenes data 2x vs 3x
-data_2x = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data_3x = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data_2x$V1, xlim=c(0,250000), breaks=50, col="red", main="Pseudogenes", xlab="Average distance to nearest breakpoint")
-hist(data_3x$V1, xlim=c(0,250000), breaks=50, col=rgb(0, 0, 1, 0.5), add=T)
-abline(v=71393, lwd=3, col="red")
-abline(v=146582, lwd=3, col="blue")
-legend(200000,65, c("2x","3x"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
+par(fig = c(0, 1, 0, 1), oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0), new = TRUE)
+plot(0, 0, type = "n", bty = "n", xaxt = "n", yaxt = "n")
+legend("bottom", c("Duplicated shuffle data", "Triplicated shuffle data", "Real average distances"), xpd = TRUE, horiz = TRUE, inset = c(0, 0), bty = "n",  col = c("red", "blue", "black"), cex=1.2, lty = c(1, 1), lwd=3)
 
 
 
-
-
-# 2x gene data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_genes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_2x_genes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,14000), breaks=50, col="red", main="Genes at duplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=598, lwd=3, col="blue")
-legend(10000,50, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
-
-# 3x genes data
-data1 = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_genes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data2 = read.table("~/Work/Code/FRAG_project/real_distances_3x_genes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data1$V1, xlim=c(0,14000), breaks=50, col="red", main="Genes at triplicated breakpoints", xlab="Average distance to nearest breakpoint")
-hist(data2$V1, add=T, breaks=50, col=rgb(0, 0, 1, 0.5))
-abline(v=837, lwd=3, col="blue")
-legend(10000,50, c("Shuffled","Real"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
-
-
-
-# pseudogenes data 2x vs 3x
-data_2x = read.table("~/Work/Code/FRAG_project/shuffled_distances_2x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-data_3x = read.table("~/Work/Code/FRAG_project/shuffled_distances_3x_pseudogenes.txt", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
-hist(data_2x$V1, xlim=c(0,14000), breaks=50, col="red", main="Pseudogenes", xlab="Average distance to nearest breakpoint")
-hist(data_3x$V1, xlim=c(0,14000), breaks=50, col=rgb(0, 0, 1, 0.5), add=T)
-abline(v=598, lwd=3, col="red")
-abline(v=837, lwd=3, col="blue")
-legend(10000,50, c("2x","3x"), lty=c(1,1), lwd=c(2.5,2.5),col=c("red","blue"))
-
-
-
-
-
-
-
-
-
+# xpd = TRUE tells R that it is OK to plot outside the region 
+# horiz = TRUE tells R that I want a horizontal legend 
+# inset = c(x,y) tells R how to move the legend relative to the 'bottom' location 
+# bty = 'n' means that 'no' box will be drawn around it 
+# pch and col are the types and colors of points 
 
 

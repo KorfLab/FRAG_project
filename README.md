@@ -808,7 +808,7 @@ The y-axes on all plots show a 25% range, in order to facilitate comparison betw
 
 ### Complementary approach ###
 
-Luca had an idea to look at the same problem from a different angle. If any feature is enriched near breakpoints then we might expect that the 'average-distance-from-breakpoint-to-nearest-feature' will be much lower than when we randomize all of the breakpoints.
+We then followed up an idea to look at the same problem from a different angle. If any feature is enriched near breakpoints then we might expect that the 'average-distance-from-breakpoint-to-nearest-feature' will be much lower than when we randomize all of the breakpoints.
 
 E.g. for duplicated blocks, genes are (on average) 598 bp away from the nearest breakpoint (standard deviation is 1,936 bp). When you randomize the breakpoint locations you mostly end up moving genes further away from breakpoints. So if you shuffle 100 times, you might see an shuffled average distance that is lower than the real average distance only 1 time in 100 (P <= 0.01).
 
@@ -836,20 +836,4 @@ REAL: Average distance to nearest gene = 597.6 bp (std dev = 1935.7)
 Shuffled datasets produced lower average distance than real average distance 0 times out of 10
 ```
 
-Need to run this for each of the features we are interested in using a wrapper script:
-
-```
-#!/bin/bash
-
-for i in DHS genes state1 state2 state3 state4 state5 state6 state7 state8 state9  pseudogene satellite transposable_element;
-
-do
-	echo "./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_2x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_2x_distance_data_${i}.tsv";
-	
-	./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_2x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_2x_distance_data_${i}.tsv
-	
-	echo "./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_3x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_3x_distance_data_${i}.tsv";
-	
-	./test_significance_of_enriched_features.pl --break GFF_files/FRAG00062_3x.gff --feature GFF_files/$i.gff  --shuffles 1000 > Results/FRAG00062_3x_distance_data_${i}.tsv
-
-done
+Results from this script are included in the Results subdirectory along with an R script (`shuffling_experiments.R`) that can plot some of these results.

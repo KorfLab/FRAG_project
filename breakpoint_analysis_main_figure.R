@@ -17,8 +17,7 @@ par(mfrow=c(2,1), mai=c(0.7, 0.8, 0.7, 0.2))
 genes_2x = read.table("Results/FRAG00062_2x_bias_data_genes_500_50_flipped.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
 genes_3x = read.table("Results/FRAG00062_3x_bias_data_genes_500_50_flipped.tsv", na.strings = "", blank.lines.skip=TRUE, fill=TRUE, stringsAsFactors=FALSE)
 
-
-plot(x=genes_2x$V3,  y=genes_2x$V7, type="l",  xlim=c(-3000, 3000), ylim=c(45,70), xlab=NA, lwd = 3, ylab=NA, col="red")
+plot(x=genes_2x$V2,  y=genes_2x$V7, type="l",  xlim=c(-3000, 3000), ylim=c(45,70), xlab=NA, lwd = 3, ylab=NA, col="red")
 par(new=TRUE)
 plot(x=genes_3x$V3,  y=genes_3x$V7, type="l",  xlim=c(-3000, 3000), ylim=c(45,70), xlab=NA, lwd = 3, ylab=NA, col="blue",  axes=F)
 
