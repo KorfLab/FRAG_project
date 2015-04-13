@@ -837,3 +837,27 @@ Shuffled datasets produced lower average distance than real average distance 0 t
 ```
 
 Results from this script are included in the Results subdirectory along with an R script (`shuffling_experiments.R`) that can plot some of these results.
+
+## One last analysis to generate individual levels of feature enrichment at each breakpoint ##
+
+Generates an 'Enrichment ratio' for genes and replication origins using genome average percentage for each feature:
+
+```bash
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/genes.gff --target gene --bp 1000
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/genes.gff --target gene --bp 1000
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/genes.gff --target gene --bp 10000
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/genes.gff --target gene --bp 10000
+
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/replication_origins.gff --target DNA_replication_origin --bp 1000
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/replication_origins.gff --target DNA_replication_origin --bp 1000
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_2x.gff --feature_gff GFF_files/replication_origins.gff --target DNA_replication_origin --bp 10000
+
+./enrichment_window_analysis.pl --breakpoint_gff GFF_files/FRAG00062_3x.gff --feature_gff GFF_files/replication_origins.gff --target DNA_replication_origin --bp 10000
+
+```
